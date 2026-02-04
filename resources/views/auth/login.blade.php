@@ -1,47 +1,86 @@
-<x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Absensi Eskul</title>
+
+    <link rel="stylesheet" href="{{ asset('assets/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/plugins.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/kaiadmin.min.css') }}">
+    <style>
+.wrapper-login {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+}
+
+/* Default desktop = tengah */
+@media (min-width: 769px) {
+    .wrapper-login {
+        align-items: center;
+    }
+}
+
+@media (max-width: 768px) and (max-height: 720px) {
+    .wrapper-login {
+        align-items: flex-start;
+        padding-top: 30px;
+    }
+}
+
+@media (max-width: 768px) and (min-height: 721px) {
+    .wrapper-login {
+        align-items: center;
+        padding-top: 0;
+    }
+}
+
+.container-login h3 {
+    margin-bottom: 20px;
+}
+</style>
+
+    
+</head>
+
+<body class="login">
+
+<div class="wrapper wrapper-login">
+<div class="container container-login animated fadeIn">
+
+    <h3 class="text-center mb-3 p-5">Login Absensi Eskul</h3>
 
     <form method="POST" action="{{ route('login') }}">
         @csrf
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        <div class="form-group">
+            <label>Email / Username / NISN</label>
+            <input type="text" name="login" class="form-control" required autofocus>
         </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+        <div class="form-group mt-3">
+            <label>Password</label>
+            <input type="password" name="password" class="form-control" required>
         </div>
 
-        <!-- Remember Me -->
-        <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:focus:ring-offset-gray-800" name="remember">
-                <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Remember me') }}</span>
-            </label>
+        <div class="form-check mt-2">
+            <input type="checkbox" name="remember" class="form-check-input">
+            <label class="form-check-label">Remember Me</label>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            @if (Route::has('password.request'))
-                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
-            @endif
+        <button class="btn btn-primary w-100 mt-3 mb-2 p-10">
+            Login
+        </button>
 
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
-        </div>
     </form>
-</x-guest-layout>
+
+</div>
+</div>
+
+<script src="{{ asset('assets/js/core/jquery-3.7.1.min.js') }}"></script>
+<script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+<script src="{{ asset('assets/js/kaiadmin.min.js') }}"></script>
+
+</body>
+</html>
+x
