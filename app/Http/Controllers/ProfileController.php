@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
-
+use Illuminate\Support\Facades\Hash;
 class ProfileController extends Controller
 {
     /**
@@ -57,4 +57,29 @@ class ProfileController extends Controller
 
         return Redirect::to('/');
     }
+
+    public function showChangePasswordForm(): View
+{
+    return view('auth.change-password'); // Pastikan path view sesuai dengan file blade yang kita buat tadi
+}
+
+/**
+ * Memproses update password.
+ */
+public function updatePassword(Request $request): RedirectResponse
+{
+    $request->validate([
+        'password' => ['required', 'string', 'min:8', 'confirmed'],
+    ]);
+
+    $user = $request->user();
+    $user->update([
+        'password' => Hash::make($request->password),
+    ]);
+
+    // Hapus session penanda agar middleware tidak memblokir lagi
+    $request->session()->forget('password_is_default');
+
+    return redirect()->route('dashboard')->with('success', 'Password berhasil diperbarui.');
+}
 }

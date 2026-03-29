@@ -1,5 +1,5 @@
 @charset "UTF-8";
-/*      jQuery Ui     */
+/*      jQuery Ui   
 .ui-draggable-handle {
   -ms-touch-action: none;
   touch-action: none; }
@@ -224,7 +224,7 @@
     border-radius: 50px;
     box-shadow: 0 1px 4px 0 #9191ab !important; }
 
-/*      jQuery Scrollbar     */
+/*      jQuery Scrollbar   
 .scroll-wrapper {
   overflow: hidden !important;
   padding: 0 !important;
@@ -829,7 +829,7 @@
 .scrollbar-chrome > .scroll-element.scroll-y.scroll-scrollx_visible .scroll-element_size, .scrollbar-chrome > .scroll-element.scroll-y.scroll-scrollx_visible .scroll-element_track {
   top: -19px; }
 
-/*      Toggle     */
+/*      Toggle   
 .checkbox label .toggle, .checkbox-inline .toggle {
   margin-left: -20px;
   margin-right: 5px; }
@@ -3687,7 +3687,7 @@ temporary rendered events).
   border-bottom-right-radius: 0; }
 
 /* resizer (cursor AND touch devices) */
-/* left resizer  */
+/* left resizer
 .fc-ltr .fc-h-event .fc-start-resizer, .fc-rtl .fc-h-event .fc-end-resizer {
   cursor: w-resize;
   left: -1px;
@@ -3720,7 +3720,7 @@ temporary rendered events).
   margin-top: -4px; }
 
 /* resizer (touch devices) */
-/* left resizer  */
+/* left resizer
 .fc-ltr .fc-h-event.fc-selected .fc-start-resizer, .fc-rtl .fc-h-event.fc-selected .fc-end-resizer {
   margin-left: -4px;
   /* centers the 8x8 dot on the left edge */ }
@@ -3765,7 +3765,7 @@ tr:first-child > td > .fc-day-grid-event {
   font-weight: bold; }
 
 /* resizer (cursor devices) */
-/* left resizer  */
+/* left resizer
 .fc-ltr .fc-day-grid-event.fc-allow-mouse-resize .fc-start-resizer, .fc-rtl .fc-day-grid-event.fc-allow-mouse-resize .fc-end-resizer {
   margin-left: -2px;
   /* to the day cell's edge */ }
@@ -4467,7 +4467,7 @@ be a descendant of the grid when it is being dragged.
   text-align: center !important;
   margin-bottom: 20px !important; }
 
-/*      Datatable     */
+/*      Datatable   
 table.dataTable {
   clear: both;
   margin-top: 15px !important;
@@ -4894,7 +4894,7 @@ div.table-responsive > div.dataTables_wrapper > div.row {
   clip: rect(0, 0, 0, 0);
   border: 0; }
 
-/*      Select2     */
+/*      Select2   
 .select2-container {
   box-sizing: border-box;
   display: inline-block;
@@ -5749,7 +5749,7 @@ div.table-responsive > div.dataTables_wrapper > div.row {
 @media (min-width: 768px) {
   .form-inline .select2-container--bootstrap {
     display: inline-block; } }
-/*      Bootstrap Tagsinput     */
+/*      Bootstrap Tagsinput   
 .bootstrap-tagsinput {
   background-color: #ffffff;
   display: inline-block;
@@ -7955,7 +7955,7 @@ img.mfp-img {
 @media screen and (max-width: 800px) and (orientation: landscape), screen and (max-height: 300px) {
   /**
        * Remove all paddings around the image on small screen
-       */
+     
   .mfp-img-mobile .mfp-image-holder {
     padding-left: 0;
     padding-right: 0; }

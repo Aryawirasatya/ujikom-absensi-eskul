@@ -51,6 +51,7 @@
 <script src="{{ asset('assets/js/setting-demo.js') }}"></script>
 <script src="{{ asset('assets/js/demo.js') }}"></script>
 
+@stack('scripts')
 <script>
   $("#lineChart").sparkline([102, 109, 120, 99, 110, 105, 115], {
     type: "line",
@@ -60,7 +61,7 @@
     lineColor: "#177dff",
     fillColor: "rgba(23, 125, 255, 0.14)",
   });
-
+  
   $("#lineChart2").sparkline([99, 125, 122, 105, 110, 124, 115], {
     type: "line",
     height: "70",

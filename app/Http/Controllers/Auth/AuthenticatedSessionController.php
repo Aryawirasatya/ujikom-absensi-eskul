@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,18 +21,39 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
-    {
-        $request->authenticate();
+    public function store(Request $request): RedirectResponse
+{
+    $request->validate([
+        'login'    => 'required|string',
+        'password' => 'required|string',
+    ]);
 
-        $request->session()->regenerate();
+    $loginInput = $request->login;
 
-        $user = auth()->user();
- 
-        return redirect('/dashboard');
-
-
+    // cek apakah email atau nisn
+    if (filter_var($loginInput, FILTER_VALIDATE_EMAIL)) {
+        $field = 'email';
+    } else {
+        $field = 'nisn';
     }
+
+    if (!Auth::attempt([
+        $field => $loginInput,
+        'password' => $request->password,
+        'is_active' => 1
+    ], $request->boolean('remember'))) {
+
+        return back()
+            ->withInput($request->only('login', 'remember'))
+            ->withErrors([
+                'login' => 'Login gagal. Email/NISN atau password salah.'
+            ]);
+    }
+
+    $request->session()->regenerate();
+
+    return redirect()->intended('/dashboard');
+}
 
     /**
      * Destroy an authenticated session.
