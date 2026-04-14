@@ -90,7 +90,7 @@
     }
 
     .progress-bar-minimal {
-        background-color: #101828; /* Hitam pekat atau biru gelap */
+        background-color: #101828;
         border-radius: 2px;
     }
 

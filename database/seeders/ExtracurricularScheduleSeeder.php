@@ -8,19 +8,16 @@ use App\Models\ExtracurricularSchedule;
 
 class ExtracurricularScheduleSeeder extends Seeder
 {
-    /**
-     * day_of_week: ISO format
-     * 1 = Senin, 2 = Selasa, 3 = Rabu, 4 = Kamis, 5 = Jumat, 6 = Sabtu, 7 = Minggu
-     */
+    
     public function run(): void
     {
         $scheduleMap = [
-            'Paskibra'             => [3, 6],   // Rabu & Sabtu
-            'Basket'               => [2, 5],   // Selasa & Jumat
-            'Paduan Suara'         => [4],       // Kamis
-            'Pramuka'              => [6],       // Sabtu
-            'Futsal'               => [1, 3],   // Senin & Rabu
-            'Karya Ilmiah Remaja'  => [2, 5],   // Selasa & Jumat
+            'Paskibra'             => [3, 6],     
+            'Basket'               => [2, 5],    
+            'Paduan Suara'         => [4],       
+            'Pramuka'              => [6],       
+            'Futsal'               => [1, 3],   
+            'Karya Ilmiah Remaja'  => [2, 5],   
         ];
 
         foreach ($scheduleMap as $eskulName => $days) {
