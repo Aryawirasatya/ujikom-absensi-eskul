@@ -24,13 +24,14 @@ class LoginRequest extends FormRequest
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
-    public function rules(): array
+     public function rules(): array
     {
         return [
-            'login' => ['required', 'string', 'email'],
+            'login' => ['required', 'string'],
             'password' => ['required', 'string'],
         ];
     }
+
 
     /**
      * Attempt to authenticate the request's credentials.
@@ -45,17 +46,18 @@ class LoginRequest extends FormRequest
 
     $field = filter_var($loginInput, FILTER_VALIDATE_EMAIL)
         ? 'email'
-        : (is_numeric($loginInput) ? 'nisn' : 'username');
+        : 'nisn';
 
     if (! Auth::attempt([
         $field => $loginInput,
         'password' => $this->input('password'),
+        'is_active' => 1
     ], $this->boolean('remember'))) {
 
         RateLimiter::hit($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'login' => trans('auth.failed'),
+            'login' => 'Login gagal. Email/NISN atau password salah.'
         ]);
     }
 
