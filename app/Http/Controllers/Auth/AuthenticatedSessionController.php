@@ -36,7 +36,11 @@ class AuthenticatedSessionController extends Controller
     } else {
         $field = 'nisn';
     }
+    $user = \App\Models\User::where($field, $loginInput)->first();
 
+    if ($user && $user->is_active == 0) {
+        return back()->withErrors(['login' => 'Akun Anda sudah dinonaktifkan karena sudah lulus/alumni.']);
+    }
     if (!Auth::attempt([
         $field => $loginInput,
         'password' => $request->password,
