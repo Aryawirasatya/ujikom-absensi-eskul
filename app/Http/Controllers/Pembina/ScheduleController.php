@@ -26,60 +26,68 @@ class ScheduleController extends Controller
 
         $schedules = $eskul->schedules()->get();
 
-        return view('pembina.schedules.index',
-            compact('eskul','schedules'));
+        return view('pembina.schedules.index', compact('eskul','schedules'));
     }
 
     public function store(Request $request, Extracurricular $eskul)
-{
-    $this->authorizeCoach($eskul);
+    {
+        $this->authorizeCoach($eskul);
 
-    $request->validate([
-        'day_of_week' => 'required|integer|min:1|max:7'
-    ]);
+        // ✅ VALIDASI BARU (PAKAI JAM)
+        $request->validate([
+            'day_of_week'      => 'required|integer|min:1|max:7',
+            'start_time'       => 'required|date_format:H:i',
+            'checkin_open_at'  => 'required|date_format:H:i',
+        ]);
 
-    if (
-        $eskul->schedules()
-            ->where('day_of_week', $request->day_of_week)
-            ->exists()
-    ) {
-        return back()->withErrors('Hari tersebut sudah ada');
+        // ✅ VALIDASI LOGIKA (PENTING BANGET)
+        if ($request->checkin_open_at >= $request->start_time) {
+            return back()->withErrors('Jam buka absensi harus sebelum jam masuk');
+        }
+
+        // ❌ CEGAH DUPLIKAT HARI
+        if (
+            $eskul->schedules()
+                ->where('day_of_week', $request->day_of_week)
+                ->exists()
+        ) {
+            return back()->withErrors('Hari tersebut sudah ada');
+        }
+
+        // ✅ CREATE DATA BARU (TANPA MENIT)
+        ExtracurricularSchedule::create([
+            'extracurricular_id' => $eskul->id,
+            'day_of_week'        => $request->day_of_week,
+            'start_time'         => $request->start_time,
+            'checkin_open_at'    => $request->checkin_open_at,
+            'is_active'          => 1
+        ]);
+
+        return back()->with('success', 'Jadwal ditambahkan');
     }
-
-    ExtracurricularSchedule::create([
-        'extracurricular_id' => $eskul->id,
-        'day_of_week' => $request->day_of_week,
-        'is_active' => 1
-    ]);
-
-    return back()->with('success','Jadwal ditambahkan');
-}
-
 
     public function toggle($eskul, ExtracurricularSchedule $schedule)
     {
         $this->authorizeCoach($schedule->extracurricular);
 
         $schedule->update([
-            'is_active'=>!$schedule->is_active
+            'is_active' => !$schedule->is_active
         ]);
 
         return back();
     }
 
-    public function destroy(ExtracurricularSchedule $schedule)
+    public function destroy(Extracurricular $eskul, ExtracurricularSchedule $schedule)
 {
-    abort_unless(
-        $schedule->extracurricular
-            ->coaches()
-            ->where('user_id', auth()->id())
-            ->exists(),
-        403
-    );
+    $this->authorizeCoach($eskul);
+
+    // Optional tapi bagus (biar aman relasi)
+    if ($schedule->extracurricular_id !== $eskul->id) {
+        abort(404);
+    }
 
     $schedule->delete();
 
     return back()->with('success', 'Jadwal berhasil dihapus');
 }
-
 }

@@ -10,8 +10,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class QrScanController extends Controller
 {
@@ -23,95 +23,54 @@ class QrScanController extends Controller
     if (auth()->id() !== $activity->session_owner_id) {
         abort(403);
     }
-     if ($activity->attendance_mode === 'manual') {
+
+    // Pastikan aktivitas masih aktif
+    if ($activity->status !== 'active') {
+        return back()->with('error', 'Aktivitas sudah berakhir atau dibatalkan.');
+    }
+
+    if ($activity->attendance_mode === 'manual') {
         return redirect()
             ->route('pembina.activity.manual_page', [$eskul, $activity->id])
             ->with('error', 'Aktivitas sedang menggunakan mode manual.');
     }
 
-    // AUTO-SET mode ke 'qr' jika belum dipilih
-    // (fallback safety: seharusnya sudah di-set via chooseMode)
     if (is_null($activity->attendance_mode)) {
         $activity->update(['attendance_mode' => 'qr']);
-        $activity->refresh();
-    }
-    // LOCK MODE
-    if (!in_array($activity->attendance_mode, [null, 'qr'])) {
-        return redirect()
-            ->route('pembina.activity.show', [$eskul, $activity->id])
-            ->with('error', 'Aktivitas sedang menggunakan mode manual.');
     }
 
     $request->validate([
         'mode' => 'required|in:checkin,checkout',
-        'duration_minutes' => 'required|integer|min:1',
-        'late_tolerance_minutes' => 'required|integer|min:0',
     ]);
 
-    if ($request->mode === 'checkout') {
-
-    $existingCheckout = ActivityQrSession::where('activity_id',$activity->id)
-        ->where('mode','checkout')
-        ->exists();
-
-    if ($existingCheckout) {
-        return back()->with(
-            'error',
-            'Sesi checkout sudah pernah dilakukan. Silakan selesaikan kegiatan.'
-        );
-    }
-}
-
-    // PROTEKSI CHECKOUT
-    if (
-        $request->mode === 'checkout' &&
-        $activity->attendance_phase !== 'checkout'
-    ) {
-        return back()->with(
-            'error',
-            'Checkout tidak bisa dibuka sebelum validasi selesai.'
-        );
+    // Proteksi fase checkout
+    if ($request->mode === 'checkout' && $activity->attendance_phase === 'not_started') {
+        return back()->with('error', 'Belum bisa membuka sesi checkout sebelum aktivitas dimulai.');
     }
 
-    /*
-    ======================================
-    AUTO CLOSE SEMUA SESSION LAMA
-    ======================================
-    */
+    // Tutup semua sesi aktif sebelumnya milik aktivitas ini
     ActivityQrSession::where('activity_id', $activity->id)
         ->where('is_active', 1)
-        ->lockForUpdate()
         ->update([
             'expires_at' => now(),
             'is_active' => 0
         ]);
 
-    $duration = (int) $request->duration_minutes;
-    $late = (int) $request->late_tolerance_minutes;
-
-    $session = ActivityQrSession::create([
+    // Buat sesi QR baru
+    ActivityQrSession::create([
         'activity_id' => $activity->id,
         'mode' => $request->mode,
-        'duration_minutes' => $duration,
-        'late_tolerance_minutes' => $late,
         'opened_at' => now(),
-        'expires_at' => now()->addMinutes(
-            $duration + ($request->mode === 'checkin' ? $late : 0)
-        ),
+        'expires_at' => now()->addMinutes(120), // Perpanjang waktu agar tidak cepat mati
         'secret_hash' => Str::random(32),
         'created_by' => auth()->id(),
         'is_active' => 1
     ]);
 
-    /*
-    ======================================
-    UPDATE PHASE (JANGAN OVERWRITE FINISHED)
-    ======================================
-    */
+    // Update fase kehadiran di tabel Activity
     if ($activity->attendance_phase !== 'finished') {
         $activity->update([
-            'attendance_phase' => $request->mode,
-            'started_at' => $activity->started_at ?? now(),
+            'attendance_phase' => $request->mode
         ]);
     }
 
@@ -120,52 +79,38 @@ class QrScanController extends Controller
         [$eskul, $activity->id]
     );
 }
-    public function closeSession($eskul, Activity $activity)
-    {
-        if (auth()->id() !== $activity->session_owner_id) abort(403);
-
-        ActivityQrSession::where('activity_id', $activity->id)
-            ->where('expires_at', '>', now())
-            ->update([
-                'expires_at' => now(),
-                'is_active' => 0
-            ]);
-
-        return back()->with('success', 'Sesi QR berhasil ditutup.');
-    }
 
     /**
-     * PROSES SCAN QR (Check-in & Checkout)
+     * TUTUP SESI QR SECARA MANUAL
+     */
+    public function closeSession($eskul, Activity $activity)
+{
+    if (auth()->id() !== $activity->session_owner_id) abort(403);
+
+    ActivityQrSession::where('activity_id', $activity->id)
+        ->where('is_active', 1)
+        ->update([
+            'expires_at' => now(),
+            'is_active' => 0
+        ]);
+
+    return back()->with('success', 'Sesi QR ditutup.');
+}
+
+    /**
+     * PROSES PEMINDAIAN SCAN QR (Check-in & Checkout)
      */
     public function scan(Request $request)
 {
     $request->validate([
         'activity_id' => 'required|exists:activities,id',
-        'qr_data' => 'required|string',
+        'qr_data'     => 'required|string',
     ]);
 
-    $activity = Activity::with('extracurricular')
-        ->findOrFail($request->activity_id);
+    $activity = Activity::with(['extracurricular'])->findOrFail($request->activity_id);
 
     if (auth()->id() !== $activity->session_owner_id) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Tidak memiliki wewenang.'
-        ], 403);
-    }
-
-    if ($activity->attendance_mode === 'manual') {
-        return response()->json([
-            'success' => false,
-            'message' => 'Mode absensi bukan QR.'
-        ]);
-    }
-
-    if ($activity->status === 'cancelled') {
-        return response()->json([
-            'success' => false,
-            'message' => 'Kegiatan sudah diliburkan.'
-        ]);
+        return response()->json(['success' => false, 'message' => 'Akses ditolak.'], 403);
     }
 
     $session = ActivityQrSession::where('activity_id', $activity->id)
@@ -175,202 +120,152 @@ class QrScanController extends Controller
         ->first();
 
     if (!$session) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Sesi scan tidak aktif.'
-        ]);
+        return response()->json(['success' => false, 'message' => 'Sesi QR sudah berakhir.'], 410);
     }
 
-    /*
-    =========================
-    HARD STOP SESSION EXPIRED
-    =========================
-    */
-    if (now()->greaterThanOrEqualTo($session->expires_at)) {
-
-        $session->update([
-            'is_active' => 0
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Sesi scan telah berakhir.'
-        ]);
-    }
-
-    /*
-    =========================
-    DECRYPT QR
-    =========================
-    */
+    // Dekripsi Data Siswa
     try {
-
         $payload = Crypt::decryptString($request->qr_data);
         $data = json_decode($payload, true);
-
-        // FIX: dukung dua format
         $userId = $data['uid'] ?? $data['user_id'] ?? null;
-
-        if (!$userId) {
-            throw new \Exception();
-        }
-
+        if (!$userId) throw new \Exception();
     } catch (\Exception $e) {
-
-        return response()->json([
-            'success' => false,
-            'message' => 'QR tidak valid.'
-        ]);
+        return response()->json(['success' => false, 'message' => 'QR Code tidak valid.'], 422);
     }
 
     $user = User::find($userId);
-    $isMember = $activity->extracurricular
-    ->members()
-    ->where('user_id', $user->id)
-    ->where('status', 'active')
-    ->exists();
-
-    if (!$isMember) {
-        return response()->json([
-            'success' => false,
-            'message' => 'User bukan anggota ekstrakurikuler ini.'
-        ]);
-    }
-
     if (!$user) {
-        return response()->json([
-            'success' => false,
-            'message' => 'User tidak ditemukan.'
-        ]);
+        return response()->json(['success' => false, 'message' => 'Siswa tidak ditemukan.'], 404);
     }
 
-    /*
-    =========================
-    CHECKIN MODE
-    =========================
-    */
+    // Cek Keanggotaan
+    if (!$activity->extracurricular->members()->where('user_id', $user->id)->where('status', 'active')->exists()) {
+        return response()->json(['success' => false, 'message' => 'Siswa bukan anggota eskul ini.'], 403);
+    }
+
+    /* --- PROSES CHECK-IN --- */
     if ($session->mode === 'checkin') {
+        $now = now();
+        $startTime = Carbon::parse($activity->started_at);
 
-       if ($activity->attendance_phase !== 'checkin') {
-        return response()->json([
-            'success' => false,
-            'message' => 'Sesi check-in sudah ditutup.'
-        ]);
-    }
+        try {
+            $result = DB::transaction(function () use ($activity, $user, $now, $startTime) {
+                $attendance = Attendance::where('activity_id', $activity->id)
+                    ->where('user_id', $user->id)
+                    ->lockForUpdate()
+                    ->first();
 
-        $exists = Attendance::where('activity_id', $activity->id)
-            ->where('user_id', $user->id)
-            ->first();
+                if ($attendance && $attendance->checkin_at) {
+                    throw new \Exception('Sudah melakukan absen masuk.');
+                }
 
-        if ($exists) {
+                $isLate = $now->gt($startTime);
+                $lateMinutes = $isLate ? $now->diffInMinutes($startTime) : 0;
+                $earlyMinutes = !$isLate ? $now->diffInMinutes($startTime) : 0;
+                $status = $isLate ? 'late' : 'on_time';
+                $note = null;
+                $tokenUsed = false;
 
-    if ($exists->attendance_source === 'scan') {
-        return response()->json([
-            'success' => false,
-            'message' => 'Sudah melakukan scan.'
-        ]);
-    }
+                // LOGIKA TOKEN TERLAMBAT
+                if ($isLate) {
+                    $token = \App\Models\UserToken::where('user_id', $user->id)
+                        ->where('status', 'AVAILABLE') 
+                        ->whereHas('item', fn($q) => $q->where('token_type', 'late_forgiveness'))
+                        ->lockForUpdate()
+                        ->first();
 
-    if (in_array($exists->final_status, ['izin','sakit','alpha'])) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Status sudah ditentukan oleh pembina.'
-        ]);
+                    if ($token) {
+                        $status = 'on_time';
+                        $lateMinutes = 0;
+                        $tokenUsed = true;
+                        $note = 'Terlambat (Diselamatkan Token)';
+                    }
+                }
+
+                $newAttendance = Attendance::updateOrCreate(
+                    ['activity_id' => $activity->id, 'user_id' => $user->id],
+                    [
+                        'checkin_at'        => $now,
+                        'checkin_status'    => $status,
+                        'late_minutes'      => $lateMinutes,
+                        'early_minutes'     => $earlyMinutes,
+                        'final_status'      => 'hadir',
+                        'attendance_source' => 'scan',
+                        'note'              => $note,
+                        'updated_by'        => auth()->id(),
+                    ]
+                );
+
+                if ($tokenUsed && isset($token)) {
+                    $token->update([
+                        'status' => 'USED',
+                        'used_at_attendance_id' => $newAttendance->id
+                    ]);
+                }
+
+              return [
+                    'name'          => $user->name,
+                    'nisn'          => $user->nisn, // Tambahkan ini
+                    'class'         => $user->currentAcademic->class_label ?? '-', // Tambahkan ini
+                    'status'        => strtoupper($status),
+                    'late_minutes'  => $lateMinutes, // Kirim angka aslinya
+                    'early_minutes' => $earlyMinutes, // Kirim angka aslinya
+                    'token_used'    => $tokenUsed
+                ];
+            });
+
+            return response()->json(array_merge(['success' => true, 'mode' => 'checkin'], $result));
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 200);
         }
     }
 
-        $status = now()->greaterThan(
-            Carbon::parse($session->opened_at)
-                ->addMinutes($session->duration_minutes)
-        ) ? 'late' : 'on_time';
+    /* --- PROSES CHECKOUT --- */
+    if ($session->mode === 'checkout') {
+        $attendance = Attendance::where('activity_id', $activity->id)
+            ->where('user_id', $user->id)
+            ->first();
 
-        Attendance::updateOrCreate(
-            [
-                'activity_id' => $activity->id,
-                'user_id' => $user->id
-            ],
-            [
-                'checkin_at' => now(),
-                'checkin_status' => $status,
-                'final_status' => 'hadir',
-                'attendance_source' => 'scan',
-                'updated_by' => auth()->id(),
-            ]
-        );
+        if (!$attendance) {
+            return response()->json(['success' => false, 'message' => 'Belum absen masuk.'], 200);
+        }
+
+        if ($attendance->checkout_at) {
+            return response()->json(['success' => false, 'message' => 'Sudah checkout.'], 200);
+        }
+
+        $attendance->update([
+            'checkout_at' => now(),
+            'checkout_status' => 'completed'
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => $user->name . ' berhasil check-in.'
+            'mode'    => 'checkout',
+            'name'    => $user->name,
+            'nisn'    => $user->nisn, // Tambahkan ini
+            'class'   => $user->currentAcademic->class_label ?? '-', // Tambahkan ini
+            'message' => 'Checkout berhasil.'
         ]);
     }
-
-    /*
-    =========================
-    CHECKOUT MODE
-    =========================
-    */
-    if ($activity->attendance_phase !== 'checkout') {
-    return response()->json([
-        'success' => false,
-        'message' => 'Sesi checkout belum dibuka.'
-    ]);
-}
-    $attendance = Attendance::where('activity_id', $activity->id)
-        ->where('user_id', $user->id)
-        ->first();
-
-    if (!$attendance || !$attendance->checkin_at) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Belum check-in.'
-        ]);
-    }
-
-    if ($attendance->checkout_at) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Sudah checkout.'
-        ]);
-    }
-
-    $attendance->update([
-        'checkout_at' => now()
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => $user->name . ' berhasil checkout.'
-    ]);
 }
 
-public function scanView($eskulId, Activity $activity)
+    /**
+     * HALAMAN VIEW SCANNER (Kamera Pembina)
+     */
+    public function scanView($eskulId, Activity $activity)
 {
-    if (auth()->id() !== $activity->session_owner_id) {
-        abort(403);
+    if (auth()->id() !== $activity->session_owner_id) abort(403);
+
+    if ($activity->attendance_mode === 'manual') {
+        return redirect()->route('pembina.activity.manual_page', [$eskulId, $activity->id]);
     }
 
-    if (!in_array($activity->attendance_mode, [null, 'qr'])) {
-        return redirect()
-            ->route('pembina.activity.manual_page', [$eskulId, $activity->id]);
-    }
-
-    if ($activity->status === 'cancelled') {
-        return redirect()
-            ->route('pembina.activity.show', [$eskulId, $activity->id])
-            ->with('error', 'Kegiatan diliburkan.');
-    }
-
-    /*
-    ======================================
-    AUTO CLEAN SESSION EXPIRED
-    ======================================
-    */
+    // Bersihkan sesi yang kadaluarsa secara diam-diam
     ActivityQrSession::where('activity_id', $activity->id)
         ->where('is_active', 1)
         ->where('expires_at', '<=', now())
-        ->update([
-            'is_active' => 0
-        ]);
+        ->update(['is_active' => 0]);
 
     $activeQrSession = ActivityQrSession::where('activity_id', $activity->id)
         ->where('is_active', 1)
@@ -379,18 +274,12 @@ public function scanView($eskulId, Activity $activity)
         ->first();
 
     if (!$activeQrSession) {
-
-        return redirect()
-            ->route('pembina.activity.show', [$eskulId, $activity->id])
-            ->with('error', 'Sesi scan telah berakhir.');
+        return redirect()->route('pembina.activity.show', [$eskulId, $activity->id])
+            ->with('error', 'Tidak ada sesi scan yang aktif.');
     }
 
     $eskul = $activity->extracurricular;
 
-    return view('pembina.activity.scan', compact(
-        'activity',
-        'eskul',
-        'activeQrSession'
-    ));
+    return view('pembina.activity.scan', compact('activity', 'eskul', 'activeQrSession'));
 }
 }

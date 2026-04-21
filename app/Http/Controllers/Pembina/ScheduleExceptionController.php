@@ -23,7 +23,10 @@ class ScheduleExceptionController extends Controller
             'exception_date' => 'required|date',
             'reason' => 'nullable|string|max:255',
         ]);
-
+        $selectedDate = \Carbon\Carbon::parse($request->exception_date);
+        if ($selectedDate->dayOfWeekIso != $schedule->day_of_week) {
+            return back()->withErrors(['exception_date' => 'Tanggal yang dipilih bukan hari jadwal rutin eskul ini.']);
+        }
         $exists = ScheduleException::where('schedule_id', $schedule->id)
             ->where('exception_date', $request->exception_date)
             ->exists();

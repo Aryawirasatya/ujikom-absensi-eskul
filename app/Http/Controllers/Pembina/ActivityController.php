@@ -23,21 +23,22 @@ class ActivityController extends Controller
     $schoolYear = SchoolYear::current();
     $today = Carbon::today();
 
-   
+    // =============================
+    // AUTO CANCEL STALE
+    // =============================
     $stalActivities = Activity::where('extracurricular_id', $eskul->id)
         ->where('school_year_id', $schoolYear->id)
         ->where('attendance_phase', 'not_started')
         ->where('status', 'active')
-        ->whereDate('activity_date', '<', $today) // sudah lewat
+        ->whereDate('activity_date', '<', $today)
         ->get();
 
     foreach ($stalActivities as $stale) {
 
-        // Tandai semua anggota aktif sebagai LIBUR
         $members = $eskul->members()->where('status', 'active')->get();
 
         foreach ($members as $member) {
-            \App\Models\Attendance::updateOrCreate(
+            Attendance::updateOrCreate(
                 [
                     'activity_id' => $stale->id,
                     'user_id'     => $member->user_id,
@@ -53,16 +54,15 @@ class ActivityController extends Controller
             );
         }
 
-        // Cancel aktivitasnya
         $stale->update([
-            'status'          => 'cancelled',
-            'attendance_phase'=> 'finished',
-            'cancel_reason'   => 'Sesi tidak dibuka oleh pembina (otomatis dibatalkan sistem).',
-            'cancelled_at'    => now(),
+            'status'           => 'cancelled',
+            'attendance_phase' => 'finished',
+            'cancel_reason'    => 'Sesi tidak dibuka oleh pembina (otomatis dibatalkan sistem).',
+            'cancelled_at'     => now(),
         ]);
 
         if ($stale->type === 'routine' && $stale->schedule_id) {
-            \App\Models\ScheduleException::firstOrCreate(
+            ScheduleException::firstOrCreate(
                 [
                     'schedule_id'    => $stale->schedule_id,
                     'exception_date' => $stale->activity_date,
@@ -76,9 +76,9 @@ class ActivityController extends Controller
         }
     }
 
-    // ============================================================
-    // 2. AUTO-CREATE: Logika yang sudah ada (tidak diubah)
-    // ============================================================
+    // =============================
+    // AUTO CREATE ROUTINE (FIXED TIME)
+    // =============================
     $schedule = ExtracurricularSchedule::where('extracurricular_id', $eskul->id)
         ->where('day_of_week', $today->dayOfWeekIso)
         ->where('is_active', 1)
@@ -96,6 +96,16 @@ class ActivityController extends Controller
                 ->exists();
 
             if (!$activityExists) {
+
+                $startDateTime = Carbon::parse(
+                    $today->format('Y-m-d') . ' ' . $schedule->start_time
+                );
+
+                // 🔥 LANGSUNG PAKAI DARI SCHEDULE
+                $checkinOpenAt = $schedule->checkin_open_at
+                    ? Carbon::parse($today->format('Y-m-d') . ' ' . $schedule->checkin_open_at)
+                    : $startDateTime; // fallback
+
                 Activity::create([
                     'school_year_id'     => $schoolYear->id,
                     'extracurricular_id' => $eskul->id,
@@ -104,6 +114,8 @@ class ActivityController extends Controller
                     'type'               => 'routine',
                     'title'              => 'Absensi Rutin ' . $eskul->name,
                     'activity_date'      => $today,
+                    'started_at'         => $startDateTime,
+                    'checkin_open_at'    => $checkinOpenAt, // ✅ FIX FINAL
                     'status'             => 'active',
                     'attendance_phase'   => 'not_started',
                     'created_by'         => auth()->id(),
@@ -112,9 +124,6 @@ class ActivityController extends Controller
         }
     }
 
-    // ============================================================
-    // 3. AMBIL SEMUA AKTIVITAS (tidak diubah)
-    // ============================================================
     $activities = Activity::where('extracurricular_id', $eskul->id)
         ->where('school_year_id', $schoolYear->id)
         ->orderBy('activity_date', 'desc')
@@ -127,33 +136,42 @@ class ActivityController extends Controller
         ->header('Pragma', 'no-cache')
         ->header('Expires', '0');
 }
-
     /**
      * Membuat Kegiatan Non-Rutin secara manual
      */
     public function storeNonRoutine(Request $request, Extracurricular $eskul)
-    {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'activity_date' => 'required|date',
-        ]);
+{
+    $request->validate([
+        'title' => 'required|string|max:255',
+        'activity_date' => 'required|date',
+        'start_time' => 'required|date_format:H:i',
+        // ✅ VALIDASI OTOMATIS: Jam buka harus SEBELUM atau SAMA DENGAN jam mulai
+        'checkin_open_time' => 'required|date_format:H:i|before_or_equal:start_time',
+    ], [
+        // Custom message agar user paham kesalahannya
+        'checkin_open_time.before_or_equal' => 'Absensi tidak boleh dibuka setelah jam kegiatan dimulai.',
+    ]);
 
-        Activity::create([
-            'school_year_id' => SchoolYear::current()->id,
-            'extracurricular_id' => $eskul->id,
-            'session_owner_id' => auth()->id(),
-            'type' => 'non_routine',
-            'title' => $request->title,
-            'description' => $request->description,
-            'activity_date' => $request->activity_date,
-            'status' => 'active',
-            'attendance_phase' => 'not_started',
-            'created_by' => auth()->id(),
-        ]);
+    // Parsing untuk database
+    $startDateTime = Carbon::parse($request->activity_date . ' ' . $request->start_time);
+    $checkinOpenAt = Carbon::parse($request->activity_date . ' ' . $request->checkin_open_time);
 
-        return back()->with('success', 'Kegiatan non-rutin berhasil dibuat.');
-    }
+    Activity::create([
+        'school_year_id'     => SchoolYear::current()->id,
+        'extracurricular_id' => $eskul->id,
+        'session_owner_id'   => auth()->id(),
+        'type'               => 'non_routine',
+        'title'              => $request->title,
+        'activity_date'      => $request->activity_date,
+        'started_at'         => $startDateTime,
+        'checkin_open_at'    => $checkinOpenAt,
+        'status'             => 'active',
+        'attendance_phase'   => 'not_started',
+        'created_by'         => auth()->id(),
+    ]);
+
+    return back()->with('success', 'Kegiatan non-rutin berhasil dibuat.');
+}
 
     /**
      * Halaman Detail Absensi (Realtime View)
@@ -219,8 +237,6 @@ public function show(Request $request, $eskulId, Activity $activity)
             $belumAbsen[] = $member;
         }
     }
-
- 
 
     // AUTO NONAKTIFKAN SESSION EXPIRED
 ActivityQrSession::where('activity_id', $activity->id)

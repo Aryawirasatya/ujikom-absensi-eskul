@@ -16,6 +16,7 @@ class Attendance extends Model
         'checkin_status',
         'final_status',
         'note',
+        'early_minutes',
         'updated_by',
         'attendance_source',
     ];
@@ -39,7 +40,17 @@ class Attendance extends Model
     }
 
     public function isManual()
-{
-    return in_array($this->final_status,['izin','sakit','hadir']);
-}
+    {
+        return in_array($this->final_status,['izin','sakit','hadir']);
+    }
+
+    // ==========================================
+    // RELASI DOMPET INTEGRITAS
+    // ==========================================
+
+    // Relasi untuk mengecek apakah absensi ini diselamatkan oleh token
+    public function appliedToken()
+    {
+        return $this->hasOne(\App\Models\UserToken::class, 'used_at_attendance_id');
+    }
 }

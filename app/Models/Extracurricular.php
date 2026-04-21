@@ -11,7 +11,7 @@ class Extracurricular extends Model
         'description',
         'is_active',
         'is_active', 
-    'show_assessment_to_student'
+        'show_assessment_to_student'
     ];
 
     public function coaches()
