@@ -4,39 +4,60 @@ namespace App\Services;
 
 use App\Models\SchoolYear;
 use App\Models\StudentAcademic;
+use App\Models\ExtracurricularMember;
 use Illuminate\Support\Facades\DB;
 
 class AcademicPromotionService
 {
     public function promote(SchoolYear $oldYear, SchoolYear $newYear): void
     {
-        $oldAcademics = StudentAcademic::where('school_year_id', $oldYear->id)
+        // Gunakan chunk agar server tidak berat jika siswa ada ribuan
+        StudentAcademic::where('school_year_id', $oldYear->id)
             ->where('academic_status', 'active')
-            ->get();
+            ->with('user') // Eager load user untuk efisiensi
+            ->chunk(100, function ($academics) use ($newYear) {
+                foreach ($academics as $academic) {
 
-        foreach ($oldAcademics as $academic) {
+                    // ==========================================
+                    // KELAS 9 → LULUS & DIBLOKIR
+                    // ==========================================
+                    if ($academic->grade >= 9) {
+                        // 1. Update status akademik menjadi graduated
+                        $academic->update([
+                            'academic_status' => 'graduated',
+                        ]);
 
-            // KELAS 9 → LULUS
-            if ($academic->grade >= 9) {
-                $academic->update([
-                    'academic_status' => 'graduated',
-                ]);
-                continue;
-            }
+                        // 2. BLOKIR LOGIN: Set is_active pada tabel users menjadi 0
+                        $academic->user->update([
+                            'is_active' => 0
+                        ]);
 
-            // NAIK KELAS
-            StudentAcademic::create([
-                'user_id' => $academic->user_id,
-                'school_year_id' => $newYear->id,
-                'grade' => $academic->grade + 1,
-                'class_label' => $academic->class_label,
-                'academic_status' => 'active',
-            ]);
+                        // 3. NONAKTIFKAN ESKUL: Keluarkan dari semua eskul yang diikuti
+                        ExtracurricularMember::where('user_id', $academic->user_id)
+                            ->where('status', 'active')
+                            ->update([
+                                'status' => 'inactive',
+                                'left_at' => now()
+                            ]);
 
-            $academic->update([
-                'academic_status' => 'promoted',
-            ]);
-        }
+                        continue;
+                    }
+
+                    // ==========================================
+                    // SISWA NAIK KELAS (Grade 7 & 8)
+                    // ==========================================
+                    StudentAcademic::create([
+                        'user_id' => $academic->user_id,
+                        'school_year_id' => $newYear->id,
+                        'grade' => $academic->grade + 1,
+                        'class_label' => $academic->class_label,
+                        'academic_status' => 'active',
+                    ]);
+
+                    $academic->update([
+                        'academic_status' => 'promoted',
+                    ]);
+                }
+            });
     }
 }
-
