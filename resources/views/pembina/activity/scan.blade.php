@@ -52,21 +52,73 @@ body{
 }
 
 /* ================= RESULT ================= */
-.result-card{
-    border-radius:18px;
-    transition:all .25s ease;
+/* ================= IMPROVED RESULT UI ================= */
+.result-card {
+    border-radius: 24px;
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
 }
 
-.result-name{
-    font-size:1.1rem;
-    font-weight:600;
+/* Warna Khusus Berdasarkan Status */
+.res-on-time { background: #dcfce7; border: 3px solid #22c55e !important; color: #15803d; }
+.res-late    { background: #fef9c3; border: 3px solid #eab308 !important; color: #854d0e; }
+.res-token   { background: #e0f2fe; border: 3px solid #0ea5e9 !important; color: #0369a1; }
+.res-checkout{ background: #eef2ff; border: 3px solid #6366f1 !important; color: #4338ca; }
+.res-error   { background: #fee2e2; border: 3px solid #ef4444 !important; color: #991b1b; }
+.res-idle    { background: #fff; border: 1px solid #e9ecef !important; }
+
+.status-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+    opacity: 0.8;
 }
 
-.result-status{
-    font-size:1.3rem;
-    font-weight:700;
+.student-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 8px;
+    color: #1e293b;
 }
 
+.student-info-pill {
+    display: inline-flex;
+    gap: 10px;
+    background: rgba(0,0,0,0.05);
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.final-badge {
+    margin-top: 15px;
+    padding: 8px 24px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Animasi Pop & Flash */
+@keyframes popIn {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: popIn 0.3s ease-out forwards; }
+.flash-success { box-shadow: 0 0 50px rgba(25, 135, 84, 0.8); border: 4px solid #198754; }
+.flash-error { box-shadow: 0 0 50px rgba(220, 53, 69, 0.8); border: 4px solid #dc3545; }
 /* ================= TIMER UI BARU ================= */
 .timer-state{
     font-size:1.2rem;
@@ -344,47 +396,88 @@ function endSession(){
 }
 
 /* ================= RESULT ================= */
+/* ================= RESULT ================= */
+/* ================= RESULT ================= */
 function showSuccess(data) {
-    let info = "";
+    const scannerEl = document.querySelector('.scanner-card');
+    scannerEl.classList.add('flash-success');
+    
+    let stateClass = "";
+    let statusText = "";
+    let badgeClass = "";
+    let icon = "";
 
     if (mode === 'checkout') {
-        info = `<span class="text-primary fw-bold"><i class="bi bi-check-circle"></i> Checkout Berhasil</span>`;
-        // Gunakan warna biru untuk checkout
-        resultBox.className = "card mt-3 result-card bg-primary bg-opacity-10 border-primary shadow-lg";
+        stateClass = "res-checkout";
+        statusText = "CHECKOUT BERHASIL";
+        badgeClass = "bg-primary text-white";
+        icon = '<i class="bi bi-door-closed-fill"></i>';
     } else {
-        // Mode Check-in
         if (data.token_used) {
-            info = `<span class="text-primary fw-bold"><i class="bi bi-ticket-perforated"></i> Bebas Telat (Voucher Digunakan)</span>`;
-            resultBox.className = "card mt-3 result-card bg-primary bg-opacity-10 border-primary shadow-lg";
-        } else if (data.late_minutes > 0) {
-            info = `<span class="text-warning fw-bold">Telat ${data.late_minutes} menit</span>`;
-            resultBox.className = "card mt-3 result-card bg-warning bg-opacity-10 border-warning shadow-lg";
-        } else {
-            info = `<span class="text-success fw-bold">Hadir Tepat Waktu</span>`;
-            resultBox.className = "card mt-3 result-card bg-success bg-opacity-10 border-success shadow-lg";
+            stateClass = "res-token";
+            statusText = "BEBAS TELAT (VOUCHER)";
+            badgeClass = "bg-info text-white";
+            icon = '<i class="bi bi-ticket-perforated-fill"></i>';
+        } 
+       // Di dalam fungsi showSuccess bagian checkin_status === 'LATE'
+        else if (data.checkin_status === 'LATE' || parseFloat(data.late_minutes) > 0) {
+            stateClass = "res-late";
+            
+            // ✅ FIX: Gunakan Math.max untuk mencegah angka minus
+            const roundedLate = Math.max(0, Math.round(parseFloat(data.late_minutes)));
+            
+            statusText = `TERLAMBAT ${roundedLate} MENIT`;
+            badgeClass = "bg-warning text-dark";
+            icon = '<i class="bi bi-clock-fill"></i>';
+        }
+        else {
+            stateClass = "res-on-time";
+            statusText = "HADIR TEPAT WAKTU";
+            badgeClass = "bg-success text-white";
+            icon = '<i class="bi bi-check-circle-fill"></i>';
         }
     }
 
-    resultName.innerText = data.name;
-
-    // Menampilkan Kelas dan NISN yang dikirim dari Controller
-    resultStatus.innerHTML = `
-        <div class="mb-1">
-            <span class="badge bg-dark">${data.class || '-'}</span> 
-            <span class="ms-1">NISN: ${data.nisn || '-'}</span>
+    // ... sisa kode render HTML tetap sama ...
+    resultBox.className = `card mt-3 result-card animate-pop ${stateClass}`;
+    resultBox.innerHTML = `
+        <div class="card-body text-center py-4">
+            <div class="status-label">Informasi Siswa</div>
+            <div class="student-name">${data.name}</div>
+            <div class="student-info-pill">
+                <span>Kelas ${data.class || '-'}</span>
+                <span style="opacity:0.3">|</span>
+                <span>NISN ${data.nisn || '-'}</span>
+            </div>
+            <div>
+                <div class="final-badge ${badgeClass}">
+                    ${icon} ${statusText}
+                </div>
+            </div>
         </div>
-        <div class="mt-2" style="font-size: 1.1rem;">${info}</div>
     `;
 
     beepSuccess();
+    setTimeout(() => scannerEl.classList.remove('flash-success'), 2000);
 }
-function showError(message){
-    resultBox.className="card mt-3 result-card bg-danger bg-opacity-10 border-danger shadow-lg";
-    resultName.innerText="Terjadi Kendala";
-    resultStatus.innerText=message;
+function showError(message) {
+    const scannerEl = document.querySelector('.scanner-card');
+    scannerEl.classList.add('flash-error');
+    
+    resultBox.className = "card mt-3 result-card animate-pop res-error";
+    resultBox.innerHTML = `
+        <div class="card-body text-center py-4">
+            <div class="status-label text-danger">Terjadi Kendala</div>
+            <div class="student-name text-danger" style="font-size:1.3rem">GAGAL MEMINDAI</div>
+            <div class="final-badge bg-danger text-white">
+                <i class="bi bi-exclamation-triangle-fill"></i> ${message}
+            </div>
+        </div>
+    `;
+    
     beepError();
+    setTimeout(() => scannerEl.classList.remove('flash-error'), 2000);
 }
-
 /* ================= SCAN ================= */
 async function onScanSuccess(decodedText){
 
@@ -426,12 +519,20 @@ async function onScanSuccess(decodedText){
         showError("Terjadi kesalahan pada sistem.");
     }
 
-    setTimeout(()=>{
-        resultBox.className="card mt-3 result-card bg-white shadow-sm border";
-        resultName.innerText="Siap melakukan pemindaian";
-        resultStatus.innerText="Silakan arahkan QR ke dalam kotak";
-        isProcessing=false;
-    },3000);
+    setTimeout(() => {
+        resultBox.className = "card mt-3 result-card res-idle shadow-sm";
+        resultBox.innerHTML = `
+            <div class="card-body text-center py-4">
+                <div class="result-name text-secondary">
+                    Siap melakukan pemindaian
+                </div>
+                <div class="result-status mt-2 text-muted">
+                    Silakan arahkan QR ke dalam kotak
+                </div>
+            </div>
+        `;
+        isProcessing = false;
+    }, 3300); // Reset setelah 3 detik
 }
 async function startScanner(cameraId){
     try{
