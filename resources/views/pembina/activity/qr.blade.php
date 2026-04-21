@@ -10,11 +10,18 @@
      */
     $isSessionActive =
     $activeQrSession &&
-    $activeQrSession->mode === $activity->attendance_phase;
-    $isCancelled = $activity->status === 'cancelled';
-    $isFinished = $activity->attendance_phase === 'finished';
-    $isCheckoutClosed = !$isSessionActive && $activity->attendance_phase === 'checkout';
-    $firstCheckinSession = $activity->qrSessions
+    $activeQrSession->mode === $activity->attendance_phase &&
+    $activeQrSession->opened_at &&
+    $activeQrSession->expires_at &&
+    now()->between(
+        $activeQrSession->opened_at,
+        $activeQrSession->expires_at
+    );
+
+$isCancelled = $activity->status === 'cancelled';
+$isFinished = $activity->attendance_phase === 'finished';
+$hasCheckinData = $attendances->count() > 0;
+$firstCheckinSession = $activity->qrSessions
     ->where('mode','checkin')
     ->sortBy('opened_at')
     ->first();
@@ -51,7 +58,18 @@
         'checkout'    => 'Pulang',
         'finished'    => 'Selesai'
     ];
-    
+    $start = \Carbon\Carbon::parse($activity->started_at);
+    $end = $activity->ended_at 
+    ? \Carbon\Carbon::parse($activity->ended_at)
+    : null;
+
+// Ambil langsung dari kolom checkin_open_at milik activity
+$openTime = $activity->checkin_open_at 
+    ? \Carbon\Carbon::parse($activity->checkin_open_at) 
+    : null;
+
+    $isBeforeOpenTime = $openTime ? now()->lt($openTime) : false; // Pakai waktu open, bukan waktu start
+    $isAfterEnd = $end ? now()->gt($end) : false;
 @endphp
 
 {{-- ================= ALERT STATUS ================= --}}
@@ -91,108 +109,118 @@
                     {{ strtoupper($activity->attendance_mode) }}
                 </span>
                 @endif
-                <p class="text-muted d-flex align-items-center m-1">
-                    <span class="fw-medium">
-                        <i class="bi bi-calendar3 text-primary"></i> 
-                        {{ \Carbon\Carbon::parse($activity->activity_date)->locale('id')->translatedFormat('l, d F Y') }}
+                <div class="mt-2">
+                    <span class="badge bg-light text-dark border px-2 py-1">
+                        <i class="bi bi-clock-fill me-1 text-warning"></i>
+                        Jam Masuk:
+                        <strong>{{ $start->format('H:i') }}</strong>
                     </span>
-                    @if($checkinOpenedAt)
-                    <div class="attendance-meta">
 
-                        <div class="meta-item meta-checkin">
-                            <i class="bi bi-box-arrow-in-right"></i>
-                            <span>Check-in</span>
-                            <strong>
-                                {{ \Carbon\Carbon::parse($checkinOpenedAt)->format('H:i') }}
-                            </strong>
-                        </div>
-
-                        <div class="meta-divider">•</div>
-
-                        <div class="meta-item meta-checkout">
-                            <i class="bi bi-box-arrow-left"></i>
-                            <span>Checkout</span>
-                            <strong>
-                                {{ $checkoutClosedAt 
-                                    ? \Carbon\Carbon::parse($checkoutClosedAt)->format('H:i') 
-                                    : '--:--' }}
-                            </strong>
-                        </div>
-
-                    </div>
-                    @endif
-                    
-                </p>
+                    <span class="ms-2 badge bg-light text-muted border px-2 py-1">
+                        <i class="bi bi-door-open me-1"></i>
+                        Absen Dibuka:
+                        <strong>
+                            {{ $openTime ? $openTime->format('H:i') : '--:--' }}
+                        </strong>
+                    </span>
+                    <span class="badge {{ $end ? 'bg-primary text-white' : 'bg-light text-muted' }} border px-2 py-1">
+                        <i class="bi bi-patch-check-fill me-1 {{ $end ? 'text-' : '' }}"></i>
+                        Jam Selesai: 
+                        <strong>
+                            {{ $end ? $end->format('H:i') : 'Belum Berakhir' }}
+                        </strong>
+                    </span>
+                </div>
             </div>
             
             {{-- ACTION BUTTONS - DYNAMIC PER PHASE --}}
             <div class="col-md-5 d-flex justify-content-md-end gap-2 align-items-center">
                 @if(!$isCancelled && !$isFinished)
-                    
-                    {{-- FASE: AWAL (NOT STARTED / STARTED) --}}
+
+                    {{-- ================= NOT STARTED ================= --}}
                     @if($activity->attendance_phase == 'not_started')
-                        <button class="btn btn-primary px-4 py-2 shadow-sm fw-bold rounded-3" data-bs-toggle="modal" data-bs-target="#checkinModal">
-                            <i class="bi bi-play-fill me-1"></i> Buka Check-in
+
+                        <button 
+                            class="btn btn-primary px-4 py-2"
+                            data-bs-toggle="modal"
+                            data-bs-target="#checkinModal"
+                            {{ $isBeforeOpenTime ? 'disabled' : '' }}
+                        >
+                            <i class="bi bi-play-fill me-1"></i>
+                            {{ $isBeforeOpenTime 
+                                ? 'Buka Pukul ' . ($openTime?->format('H:i') ?? '--:--') 
+                                : 'Buka Check-in' 
+                            }}
                         </button>
 
-                    {{-- FASE: MASUK (CHECKIN) --}}
+                    {{-- ================= CHECKIN ================= --}}
                     @elseif($activity->attendance_phase == 'checkin')
-                        @php
-                        $hasCheckinData = $attendances->count() > 0;
-                        @endphp
-                     @if($isSessionActive)
 
-                    <a href="{{ route('pembina.activity.qr.scan_view',[$eskul->id,$activity->id]) }}"
-                    class="btn btn-success px-4 py-2 shadow-sm fw-bold rounded-3">
-                    <i class="bi bi-qr-code-scan me-2"></i>Mode Scanner
-                    </a>
-
-                    @elseif(!$hasCheckinData)
-
-                    <button class="btn btn-outline-success px-4 py-2 shadow-sm fw-bold rounded-3"
-                    data-bs-toggle="modal" data-bs-target="#checkinModal">
-                    <i class="bi bi-arrow-repeat me-1"></i>Lanjut Scan Checkin
-                    </button>
-
-                    @endif
-                                            
-                        <button class="btn btn-warning px-4 py-2 shadow-sm fw-bold rounded-3" data-bs-toggle="modal" data-bs-target="#validationModal">
-                            <i class="bi bi-person-check-fill me-1"></i> Validasi & Checkout
-                        </button>
-
-                    {{-- FASE: PULANG (CHECKOUT) --}}
-                    @elseif($activity->attendance_phase == 'checkout')
                         @if($isSessionActive)
 
                             <a href="{{ route('pembina.activity.qr.scan_view',[$eskul->id,$activity->id]) }}"
-                            class="btn btn-success px-4 py-2 shadow-sm fw-bold rounded-3">
-                            <i class="bi bi-qr-code-scan me-2"></i>Scan Pulang
+                               class="btn btn-success px-4 py-2">
+                                <i class="bi bi-qr-code-scan me-2"></i>Mode Scanner
                             </a>
 
-                           <button
-                                class="btn btn-danger px-4 py-2 shadow-sm fw-bold rounded-3"
+                        @elseif(!$hasCheckinData)
+
+                            <button class="btn btn-outline-success"
+                                data-bs-toggle="modal"
+                                data-bs-target="#checkinModal">
+                                Lanjut Scan
+                            </button>
+
+                        @else
+
+                            <span class="text-muted small">Sesi sudah ditutup</span>
+
+                        @endif
+
+                        <button class="btn btn-warning"
+                            data-bs-toggle="modal"
+                            data-bs-target="#validationModal">
+                            Validasi & Checkout
+                        </button>
+
+                    {{-- ================= CHECKOUT ================= --}}
+                    @elseif($activity->attendance_phase == 'checkout')
+
+                        @if($isSessionActive)
+
+                            <a href="{{ route('pembina.activity.qr.scan_view',[$eskul->id,$activity->id]) }}"
+                               class="btn btn-success px-4 py-2">
+                                <i class="bi bi-qr-code-scan me-2"></i>Scan Pulang
+                            </a>
+
+                            <button class="btn btn-danger"
                                 data-bs-toggle="modal"
                                 data-bs-target="#closeCheckoutModal">
-
-                                <i class="bi bi-stop-circle me-1"></i>
                                 Akhiri Checkout
-
                             </button>
 
                         @elseif($activity->qrSessions->where('mode','checkout')->count() == 0)
 
-                            <button class="btn btn-warning px-4 py-2 shadow-sm fw-bold rounded-3"
-                                data-bs-toggle="modal" data-bs-target="#checkoutModal">
-                                <i class="bi bi-door-open-fill me-1"></i>Buka Sesi Pulang
+                            <button class="btn btn-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#checkoutModal">
+                                Buka Sesi Pulang
                             </button>
 
-                    
+                        @else
+
+                            <span class="text-muted small">Sesi sudah ditutup</span>
+
                         @endif
 
-                        {{-- Logika Tombol Selesaikan --}}
                         @php
                             $hasCheckin = $activity->qrSessions->where('mode', 'checkin')->count() > 0;
                             $hasCheckout = $activity->qrSessions->where('mode', 'checkout')->count() > 0;
+
+                            $isCheckoutClosed =
+                                $activity->attendance_phase === 'checkout' &&
+                                $activity->qrSessions->where('mode','checkout')->count() > 0 &&
+                                !$isSessionActive;
                         @endphp
 
                         @if($hasCheckin && $hasCheckout && $isCheckoutClosed)
@@ -200,16 +228,14 @@
                                 onclick="confirmFinish()">
                                 <i class="bi bi-flag-fill me-1"></i> Selesaikan
                             </button>
-
                         @else
-                             <button class="btn btn-secondary px-4 py-2 shadow-sm fw-bold rounded-3"
-                            onclick="Swal.fire('Checkout Belum Ditutup','Klik tombol AKHIRI CHECKOUT terlebih dahulu','warning')">
-                            <i class="bi bi-lock-fill me-1"></i> Selesaikan
+                            <button class="btn btn-secondary px-4 py-2 shadow-sm fw-bold rounded-3"
+                                onclick="Swal.fire('Checkout Belum Ditutup','Klik tombol AKHIRI CHECKOUT terlebih dahulu','warning')">
+                                <i class="bi bi-lock-fill me-1"></i> Selesaikan
                             </button>
                         @endif
-                    @endif
 
-                    <form id="finishForm" method="POST" action="{{ route('pembina.activity.finish',[$eskul->id,$activity->id]) }}" class="d-none">@csrf</form>
+                    @endif
 
                 @else
                     {{-- TAMPILAN JIKA SUDAH SELESAI ATAU DIBATALKAN --}}
@@ -218,6 +244,10 @@
                         {{ $isCancelled ? 'KEGIATAN DIBATALKAN' : 'AKTIVITAS SELESAI / TERKUNCI' }}
                     </div>
                 @endif
+
+                <form id="finishForm" method="POST" action="{{ route('pembina.activity.finish',[$eskul->id,$activity->id]) }}" class="d-none">
+                    @csrf
+                </form>
             </div>
         </div>
  
@@ -268,13 +298,16 @@
 <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-5">
     <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
         <div>
-            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people-fill me-2 text-primary"></i>Status Kehadiran Anggota</h5>
+            <h5 class="mb-0 fw-bold text-dark">
+                <i class="bi bi-people-fill me-2 text-primary"></i>Status Kehadiran Anggota
+            </h5>
             <small class="text-muted">Kelola data presensi secara individu jika diperlukan</small>
         </div>
         <div class="badge bg-light text-primary border px-3 py-2 rounded-pill">
             Total: {{ $activeMembers->total() }} Anggota Terdaftar
         </div>
     </div>
+
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 custom-table">
             <thead class="bg-light">
@@ -284,12 +317,11 @@
                     <th class="py-3 border-0 text-center">Jam Pulang</th>
                     <th class="py-3 border-0 text-center">Status</th>
                     <th class="py-3 border-0 text-center">Metode</th>
-                    @if(!$isCancelled && !$isFinished && !$isSessionActive)
-                    @endif
                 </tr>
             </thead>
+
             <tbody>
-                @forelse($activeMembers as $member)
+            @forelse($activeMembers as $member)
                 @php $att = $attendances[$member->user_id] ?? null; @endphp
                 <tr>
                     <td class="ps-4 sticky-col bg-white">
@@ -303,97 +335,56 @@
                             </div>
                         </div>
                     </td>
+
                     <td class="text-center">
                         @if($att?->checkin_at)
                             <div class="fw-bold text-dark">{{ $att->checkin_at->format('H:i') }}</div>
-                            <span class="badge bg-{{ $att->checkin_status == 'late' ? 'danger' : 'success' }}-subtle text-{{ $att->checkin_status == 'late' ? 'danger' : 'success' }} px-2 py-0" style="font-size: 0.6rem;">
-                                {{ strtoupper($att->checkin_status) }}
-                            </span>
+                            
+                            @if($att->checkin_status == 'late')
+                                <span class="badge bg-danger-subtle text-danger px-2 py-0" style="font-size: 0.6rem;">
+                                    TELAT {{ $att->late_minutes ?? 0 }} MNT
+                                </span>
+                            @else
+                                <span class="badge bg-success-subtle text-success px-2 py-0" style="font-size: 0.6rem;">
+                                    AWAL {{ $att->early_minutes ?? 0 }} MNT
+                                </span>
+                            @endif
                         @else
                             <span class="text-muted opacity-25 small italic">--:--</span>
                         @endif
                     </td>
+
                     <td class="text-center">
                         @if($att?->checkout_at)
                             <div class="fw-bold text-dark">{{ $att->checkout_at->format('H:i') }}</div>
                             <span class="badge bg-success-subtle text-success px-2 py-0" style="font-size: 0.6rem;">CHECKED OUT</span>
-                       @elseif($att?->checkin_at && !$att->checkout_at)
-                        <span class="text-warning small fw-bold">
-                        <i class="bi bi-clock-history me-1"></i>
-                        BELUM CHECKOUT
-                        </span>
+                        @elseif($att?->checkin_at && !$att->checkout_at)
+                            <span class="text-warning small fw-bold">
+                                <i class="bi bi-clock-history me-1"></i> BELUM CHECKOUT
+                            </span>
                         @else
                             <span class="text-muted opacity-25 small">--:--</span>
                         @endif
                     </td>
+
                     <td class="text-center">
-
                         @if($att?->final_status == 'hadir')
-
-                            @if($att->checkin_status == 'late')
-
-                                <span class="badge bg-warning text-dark fw-bold">
-                                    HADIR (TELAT)
-                                </span>
-
-                            @else
-
-                                <span class="badge bg-success fw-bold">
-                                    HADIR
-                                </span>
-
-                            @endif
-
-                            @if(!$att->checkout_at)
-                            <div class="justify-content-center">
-
-                                <div class="badge bg-danger small text-white  mt-1">
-                                    BELUM CHECKOUT!
-                                </div>
-
-                            </div>
-
-
-                            @endif
-
-
+                            <span class="badge {{ $att->checkin_status == 'late' ? 'bg-warning text-dark' : 'bg-success' }} fw-bold">
+                                HADIR {{ $att->checkin_status == 'late' ? '(TELAT)' : '' }}
+                            </span>
                         @elseif($att?->final_status == 'izin')
-
-                        <span class="badge bg-info fw-bold">
-                        IZIN
-                        </span>
-
-
+                            <span class="badge bg-info fw-bold">IZIN</span>
                         @elseif($att?->final_status == 'sakit')
-
-                        <span class="badge bg-primary fw-bold">
-                        SAKIT
-                        </span>
-
-
+                            <span class="badge bg-primary fw-bold">SAKIT</span>
                         @elseif($att?->final_status == 'alpha')
-
-                        <span class="badge bg-danger fw-bold">
-                        ALPHA
-                        </span>
-
-
+                            <span class="badge bg-danger fw-bold">ALPHA</span>
                         @elseif($att?->final_status == 'libur')
-
-                        <span class="badge bg-secondary fw-bold">
-                        LIBUR
-                        </span>
-
-
+                            <span class="badge bg-secondary fw-bold">LIBUR</span>
                         @else
-
-                        <span class="badge bg-light text-muted">
-                        PENDING
-                        </span>
-
+                            <span class="badge bg-light text-muted">PENDING</span>
                         @endif
-
                     </td>
+
                     <td class="text-center">
                         @if($att)
                             <span class="text-uppercase fw-bold d-block" style="font-size: 0.65rem; color: {{ $att->attendance_source == 'scan' ? '#198754' : '#0d6efd' }}">
@@ -403,19 +394,20 @@
                         @endif
                     </td>
                 </tr>
-                @empty
+            @empty
                 <tr>
-                    <td colspan="6" class="text-center py-5">
+                    <td colspan="5" class="text-center py-5">
                         <img src="https://cdn-icons-png.flaticon.com/512/6134/6134065.png" width="80" class="opacity-25 mb-3">
-                        <p class="text-muted fw-bold">Belum ada anggota yang terdaftar di ekstrakurikuler ini.</p>
+                        <p class="text-muted fw-bold">Belum ada anggota yang terdaftar.</p>
                     </td>
                 </tr>
-                @endforelse
+            @endforelse
             </tbody>
         </table>
     </div>
+
     <div class="d-flex justify-content-center mt-3">
-    {{ $activeMembers->links() }}
+        {{ $activeMembers->links() }}
     </div>
 </div>
 
@@ -436,24 +428,22 @@
                     <i class="bi bi-qr-code-scan text-primary" style="font-size: 3rem;"></i>
                     <p class="text-muted small px-3">Atur waktu pengerjaan presensi bagi siswa yang membawa perangkat.</p>
                 </div>
-                <div class="row g-3">
-                    <div class="col-6">
-                        <div class="form-floating">
-                            <input type="number" name="duration_minutes" class="form-control" id="f1" value="15" min="1">
-                            <label for="f1">Durasi Scan (Menit)</label>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="form-floating">
-                            <input type="number" name="late_tolerance_minutes" class="form-control" id="f2" value="15" min="0">
-                            <label for="f2">Toleransi Telat (Menit)</label>
-                        </div>
+               <div class="text-center">
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Absensi mengikuti jadwal kegiatan.<br>
+                        Siswa bisa mulai scan sesuai waktu yang telah ditentukan.
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0">
+           <div class="modal-footer border-0">
                 <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Batal</button>
-                <button class="btn btn-primary px-4 fw-bold shadow">MULAI SESI SEKARANG</button>
+                <button type="submit" class="btn btn-primary" {{ $isBeforeOpenTime ? 'disabled' : '' }}>
+                    {{ $isBeforeOpenTime 
+                        ? 'Buka Pukul ' . ($openTime?->format('H:i') ?? '--:--') 
+                        : 'Mulai Sekarang' 
+                    }}
+                </button>
             </div>
         </form>
     </div>
@@ -593,9 +583,8 @@
                 <h6 class="fw-bold">Buka Pintu Keluar</h6>
                 <p class="small text-muted mb-4">Siswa yang sudah hadir (Scan/Manual) wajib melakukan scan checkout untuk menutup kehadirannya.</p>
                 
-                <div class="form-floating mb-3">
-                    <input type="number" name="duration_minutes" class="form-control" id="f3" value="15" min="1">
-                    <label for="f3">Durasi Sesi Aktif (Menit)</label>
+                <div class="alert alert-info small">
+                    Sesi checkout mengikuti waktu kegiatan yang telah ditentukan.
                 </div>
             </div>
             <div class="modal-footer border-0">

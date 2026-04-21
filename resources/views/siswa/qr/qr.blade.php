@@ -436,9 +436,25 @@
 
 @push('scripts')
 <script>
+    document.addEventListener('DOMContentLoaded', function () {
+    const clock = document.getElementById('clock');
+
+    function updateClock() {
+        const now = new Date();
+
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        clock.textContent = `${hours}:${minutes}:${seconds}`;
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+});
 document.addEventListener('DOMContentLoaded', function () {
     // Tombol Foto
-    const btnFoto = document.getElementById('bukaModalFoto');
+    const btnFoto = document.getElementById('btnBukaModal');
     if (btnFoto) {
         btnFoto.addEventListener('click', function () {
             console.log("Tombol diklik!");

@@ -57,6 +57,10 @@
             <div class="ms-lg-2 ps-lg-2 border-start-lg text-muted small">
                 <i class="bi bi-calendar3 me-1"></i>
                 {{ \Carbon\Carbon::parse($activity->activity_date)->locale('id')->translatedFormat('l, d F Y') }}
+                <div class="small text-muted mt-1">
+                    <i class="bi bi-clock me-1"></i>
+                    Jam Masuk: <strong>{{ \Carbon\Carbon::parse($activity->started_at)->format('H:i') }}</strong>
+                </div>
             </div>
 
         </div>
@@ -538,34 +542,36 @@ function setCheckout(userId) {
             }
         }).catch(()=>Swal.fire('Error','Gagal.','error').then(()=>location.reload()));
 }
-
-/* ---- Bulk Checkin ---- */
 function bulkCheckin(status) {
     const lbl = { hadir:'Hadir', izin:'Izin', sakit:'Sakit', alpha:'Alpha' };
     Swal.fire({
         title: `Tandai Semua ${lbl[status]}?`,
-        text: `Semua anggota akan ditandai ${lbl[status]}.`,
-        icon: 'warning', showCancelButton: true,
-        confirmButtonColor: status==='hadir'?'#198754':(status==='alpha'?'#dc3545':'#0d6efd'),
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: `Ya, ${lbl[status]} Semua`, cancelButtonText: 'Batal'
+        text: `Seluruh anggota eskul (termasuk di halaman lain) akan ditandai ${lbl[status]}.`,
+        icon: 'warning', 
+        showCancelButton: true,
+        confirmButtonText: `Ya, Proses Semua`,
+        cancelButtonText: 'Batal'
     }).then(r => {
         if (!r.isConfirmed) return;
+        
         Swal.fire({ title:'Memproses...', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
-        const ids = getAllRowIds();
-        post(BULK_CI_URL, { user_ids: ids, status })
+        
+        // KIRIM HANYA STATUS KE CONTROLLER
+        post(BULK_CI_URL, { status: status }) 
             .then(d => {
                 if (d.success) {
-                    ids.forEach(id => {
-                        updateBadge(id, status);
-                        updateBtns(id, status);
-                        if (d.checkin_time)
-                            document.getElementById('checkin-time-'+id).innerHTML =
-                                `<span class="fw-bold text-dark">${d.checkin_time}</span>`;
+                    Swal.fire({ 
+                        icon:'success', 
+                        title:'Berhasil', 
+                        text: d.message,
+                        timer: 1500
+                    }).then(() => {
+                        location.reload(); // WAJIB RELOAD untuk sinkronisasi pagination
                     });
-                    Swal.fire({ icon:'success', title:'Berhasil', text:d.message, timer:1500, showConfirmButton:false });
-                } else Swal.fire('Gagal', d.message, 'error');
-            }).catch(()=>Swal.fire('Error','Terjadi kesalahan.','error'));
+                } else {
+                    Swal.fire('Gagal', d.message, 'error');
+                }
+            }).catch(() => Swal.fire('Error', 'Terjadi kesalahan sistem.', 'error'));
     });
 }
 
@@ -597,9 +603,6 @@ function post(url, body) {
         headers: { 'X-CSRF-TOKEN':CSRF, 'Content-Type':'application/json', 'Accept':'application/json' },
         body: JSON.stringify(body)
     }).then(r => r.json());
-}
-function getAllRowIds() {
-    return Array.from(document.querySelectorAll('tr[id^="row-"]')).map(r => r.id.replace('row-',''));
 }
 function updateBadge(id, status) {
     const c = document.getElementById('badge-'+id);

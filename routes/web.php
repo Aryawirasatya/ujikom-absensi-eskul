@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\{
     ExtracurricularController,
     ReportController,
     AssessmentQuestionController,
+    DompetAdminController,
     ScheduleExceptionController as AdminScheduleExceptionController
 };
 
@@ -42,6 +43,7 @@ use App\Http\Controllers\Siswa\{
     StudentQrController,
     StudentEskulController,
     StudentAttendanceController,
+    DompetSiswaController
     
 
 
@@ -151,6 +153,24 @@ Route::middleware(['auth', 'check.user.active', 'role:admin'])
             Route::get('/eskul/{eskul}', [AssessmentReportController::class, 'perEskul'])->name('per-eskul');
             Route::get('/siswa/{user}', [AssessmentReportController::class, 'perSiswa'])->name('per-siswa');
         });
+
+
+        Route::get('/dompet', [DompetAdminController::class, 'index'])->name('dompet.index');
+    
+        // Kelola Aturan (Rule Engine)
+        Route::post('/dompet/rules', [DompetAdminController::class, 'storeRule'])->name('dompet.rules.store');
+        Route::delete('/dompet/rules/{rule}', [DompetAdminController::class, 'destroyRule'])->name('dompet.rules.destroy');
+        
+        // Kelola Katalog (Marketplace)
+        Route::post('/dompet/items', [DompetAdminController::class, 'storeItem'])->name('dompet.items.store');
+        Route::delete('/dompet/items/{item}', [DompetAdminController::class, 'destroyItem'])->name('dompet.items.destroy'); 
+        // RULE
+Route::put('/dompet/rules/{id}', [DompetAdminController::class, 'updateRule'])
+    ->name('dompet.rules.update');
+
+// ITEM
+Route::put('/dompet/items/{id}', [DompetAdminController::class, 'updateItem'])
+    ->name('dompet.items.update');
     });
 
 /*
@@ -267,6 +287,12 @@ Route::middleware(['auth', 'check.user.active', 'role:siswa'])
 
         // Penilaian — terpisah dari kehadiran
         Route::get('/penilaian', [SiswaAssessmentController::class, 'index'])->name('penilaian.index');
+        Route::get('/dompet', [DompetSiswaController::class, 'index'])->name('dompet.index');
+    Route::post('/dompet/buy', [DompetSiswaController::class, 'buyToken'])->name('dompet.buy');
+
+
+Route::post('/dompet/deactivate/{id}', [DompetSiswaController::class, 'deactivateToken'])
+    ->name('dompet.deactivate');
     });
 
 require __DIR__.'/auth.php';

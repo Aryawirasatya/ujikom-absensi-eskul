@@ -15,8 +15,8 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
     
-
     use HasRoles;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -30,8 +30,8 @@ class User extends Authenticatable
         'is_active',
         'gender',
         'photo',
+        'point_balance'
     ];
-
 
     /**
      * The attributes that should be hidden for serialization.
@@ -53,15 +53,18 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'point_balance' => 'integer',
         ];
     }
+
     public function extracurricularCoaches()
-{
-    return $this->hasMany(
-        \App\Models\ExtracurricularCoach::class,
-        'user_id'
-    );
-}
+    {
+        return $this->hasMany(
+            \App\Models\ExtracurricularCoach::class,
+            'user_id'
+        );
+    }
+
     public function academics()
     {
         return $this->hasMany(StudentAcademic::class);
@@ -72,24 +75,44 @@ class User extends Authenticatable
         return $this->hasOne(StudentAcademic::class)
             ->whereHas('schoolYear', fn ($q) => $q->where('is_active', true));
     }
+
     public function extracurricularMembers()
-{
-    return $this->hasMany(
-        \App\Models\ExtracurricularMember::class
-    );
-}
-
-public function getPhotoUrlAttribute()
-{
-    if ($this->photo) {
-        return asset('storage/students/' . $this->photo);
+    {
+        return $this->hasMany(
+            \App\Models\ExtracurricularMember::class
+        );
     }
-    return null;
 
-}
-public function attendances()
+    public function getPhotoUrlAttribute()
+    {
+        if ($this->photo) {
+            return asset('storage/students/' . $this->photo);
+        }
+        return null;
+    }
+
+    public function attendances()
+    {
+        return $this->hasMany(\App\Models\Attendance::class);
+    }
+
+    // ==========================================
+    // RELASI DOMPET INTEGRITAS
+    // ==========================================
+
+    // Relasi ke buku besar poin
+    public function pointLedgers()
+    {
+        return $this->hasMany(\App\Models\PointLedger::class);
+    }
+
+    public function tokens()
+    {
+        return $this->hasMany(\App\Models\UserToken::class);
+    }
+
+    public function getCurrentPointsAttribute()
 {
-    return $this->hasMany(\App\Models\Attendance::class);
+    return $this->point_balance ?? 0;
 }
-
 }

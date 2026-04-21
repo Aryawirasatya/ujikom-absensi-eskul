@@ -14,6 +14,7 @@ class ExtracurricularSchedule extends Model
         'start_time',
         'end_time',
         'primary_coach_id',
+        'checkin_open_at',
         'is_active',
         'notes',
     ];

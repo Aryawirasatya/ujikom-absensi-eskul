@@ -98,11 +98,14 @@ body{
 </style>
 
 @php
-    $openedAt = \Carbon\Carbon::parse($activeQrSession->opened_at);
-    $expiresAt = \Carbon\Carbon::parse($activeQrSession->expires_at);
+    $start = \Carbon\Carbon::parse($activity->started_at);
 
-    $batasHadir = $openedAt->copy()
-        ->addMinutes($activeQrSession->duration_minutes);
+    // ✅ FIX: pakai field baru (fixed time)
+    $openTime = $activity->checkin_open_at
+        ? \Carbon\Carbon::parse($activity->checkin_open_at)
+        : $start; // fallback aman
+
+    $expireTime = \Carbon\Carbon::parse($activeQrSession->expires_at);
 @endphp
 
 <div class="container-fluid py-4">
@@ -146,11 +149,6 @@ body{
                     <div id="timerState" class="timer-state text-success">
                         MODE HADIR
                     </div>
-
-                    <div id="countdown" class="timer-countdown text-dark">
-                        00:00
-                    </div>
-
                     <div id="timerLabel" class="timer-sub mb-2">
                         Menghitung waktu...
                     </div>
@@ -158,28 +156,24 @@ body{
                     <hr>
 
                     <div class="timer-sub">
-                        Dibuka: <strong>{{ $openedAt->format('H:i') }}</strong>
+                        Mulai Scan:
+                        <strong>{{ $openTime->format('H:i') }}</strong>
                     </div>
 
                     @if($activeQrSession->mode === 'checkin')
-                        <div class="timer-sub">
-                            Batas Hadir:
-                            <strong>{{ $batasHadir->format('H:i') }}</strong>
+                      <div class="timer-sub">
+                            Jam Masuk:
+                            <strong>{{ $start->format('H:i') }}</strong>
                         </div>
 
                         <div class="timer-sub">
-                            Batas Telat:
-                            <strong>{{ $expiresAt->format('H:i') }}</strong>
-                        </div>
-
-                        <div class="text-warning small mt-1">
-                            Toleransi keterlambatan:
-                            {{ $activeQrSession->late_tolerance_minutes }} menit
+                            Sesi Berakhir:
+                            <strong>{{ $expireTime->format('H:i') }}</strong>
                         </div>
                     @else
                         <div class="timer-sub">
                             Berakhir:
-                            <strong>{{ $expiresAt->format('H:i') }}</strong>
+                             <strong>{{ $expireTime->format('H:i') }}</strong>
                         </div>
                     @endif
 
@@ -226,11 +220,11 @@ const csrfToken = "{{ csrf_token() }}";
 
 const mode = "{{ $activeQrSession->mode }}";
 
-const openedAt = {{ $openedAt->timestamp * 1000 }};
-const batasHadir = {{ $batasHadir->timestamp * 1000 }};
-const expireTime = {{ $expiresAt->timestamp * 1000 }};
+const openTime = {{ $openTime->timestamp * 1000 }};
+const startTime = {{ $start->timestamp * 1000 }};
+ const expireTime = {{ $expireTime->timestamp * 1000 }};
 
-const countdownEl = document.getElementById('countdown');
+
 const timerState = document.getElementById('timerState');
 const timerLabel = document.getElementById('timerLabel');
 
@@ -266,62 +260,81 @@ function beepError(){
 }
 function beepEnd(){ playBeep(250,0.6,1); }
 
-/* ================= TIMER LOGIC BARU ================= */
 setInterval(function(){
 
-    const now = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    const nowText = now.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
 
     if(mode === 'checkin'){
 
-        if(now <= batasHadir){
-            timerState.innerText = "MODE HADIR";
+        if(nowMs < openTime){
+
+            timerState.innerText = "BELUM DIBUKA";
+            timerState.className = "timer-state text-secondary";
+            timerLabel.innerText =
+                "Sekarang: " + nowText + " • Menunggu waktu buka";
+
+        }else if(nowMs <= startTime){
+
+            // ✅ BENAR: lebih awal = start - now
+            const diff = Math.max(0, Math.round((startTime - nowMs) / 60000));
+
+            timerState.innerText = "HADIR";
             timerState.className = "timer-state text-success";
-            timerLabel.innerText = "Menuju fase TELAT";
+            timerLabel.innerText =
+                "Sekarang: " + nowText +
+                (diff === 0
+                    ? " • Tepat waktu"
+                    : " • Lebih awal " + diff + " menit"
+                );
 
-            updateCountdown(batasHadir - now);
+        }else if(nowMs <= expireTime){
 
-        }else if(now <= expireTime){
+            // ✅ BENAR: telat = now - start
+            const diff = Math.max(0, Math.round((nowMs - startTime) / 60000));
 
-            timerState.innerText = "MODE TELAT";
+            timerState.innerText = "TELAT";
             timerState.className = "timer-state text-warning";
-            timerLabel.innerText = "Menuju sesi ditutup";
-
-            updateCountdown(expireTime - now);
+            timerLabel.innerText =
+                "Sekarang: " + nowText +
+                (diff === 0
+                    ? " • Baru lewat waktu"
+                    : " • Telat " + diff + " menit"
+                );
 
         }else{
+
             endSession();
         }
 
     }else{
-        const dist = expireTime - now;
-        if(dist <= 0){
+
+        if(nowMs > expireTime){
             endSession();
         }else{
             timerState.innerText = "CHECKOUT AKTIF";
             timerState.className = "timer-state text-primary";
-            timerLabel.innerText = "Menuju sesi selesai";
-            updateCountdown(dist);
+            timerLabel.innerText =
+                "Sekarang: " + nowText + " • Silakan checkout";
         }
+
     }
 
 },1000);
 
-function updateCountdown(distance){
-    const m = Math.floor(distance/(1000*60));
-    const s = Math.floor((distance%(1000*60))/1000);
-    countdownEl.innerText =
-        String(m).padStart(2,'0') + ":" +
-        String(s).padStart(2,'0');
-}
-
 function endSession(){
     if(isExpired) return;
 
-    isExpired=true;
-    timerState.innerText="SESI BERAKHIR";
-    timerState.className="timer-state text-danger";
-    timerLabel.innerText="Waktu habis";
-    countdownEl.innerText="00:00";
+    isExpired = true;
+    timerState.innerText = "SESI BERAKHIR";
+    timerState.className = "timer-state text-danger";
+    timerLabel.innerText = "Waktu habis";
 
     if(html5QrCode){
         html5QrCode.stop();
@@ -331,13 +344,40 @@ function endSession(){
 }
 
 /* ================= RESULT ================= */
-function showSuccess(message){
-    resultBox.className="card mt-3 result-card bg-success bg-opacity-10 border-success shadow-lg";
-    resultName.innerText="Absensi Berhasil";
-    resultStatus.innerText=message;
+function showSuccess(data) {
+    let info = "";
+
+    if (mode === 'checkout') {
+        info = `<span class="text-primary fw-bold"><i class="bi bi-check-circle"></i> Checkout Berhasil</span>`;
+        // Gunakan warna biru untuk checkout
+        resultBox.className = "card mt-3 result-card bg-primary bg-opacity-10 border-primary shadow-lg";
+    } else {
+        // Mode Check-in
+        if (data.token_used) {
+            info = `<span class="text-primary fw-bold"><i class="bi bi-ticket-perforated"></i> Bebas Telat (Voucher Digunakan)</span>`;
+            resultBox.className = "card mt-3 result-card bg-primary bg-opacity-10 border-primary shadow-lg";
+        } else if (data.late_minutes > 0) {
+            info = `<span class="text-warning fw-bold">Telat ${data.late_minutes} menit</span>`;
+            resultBox.className = "card mt-3 result-card bg-warning bg-opacity-10 border-warning shadow-lg";
+        } else {
+            info = `<span class="text-success fw-bold">Hadir Tepat Waktu</span>`;
+            resultBox.className = "card mt-3 result-card bg-success bg-opacity-10 border-success shadow-lg";
+        }
+    }
+
+    resultName.innerText = data.name;
+
+    // Menampilkan Kelas dan NISN yang dikirim dari Controller
+    resultStatus.innerHTML = `
+        <div class="mb-1">
+            <span class="badge bg-dark">${data.class || '-'}</span> 
+            <span class="ms-1">NISN: ${data.nisn || '-'}</span>
+        </div>
+        <div class="mt-2" style="font-size: 1.1rem;">${info}</div>
+    `;
+
     beepSuccess();
 }
-
 function showError(message){
     resultBox.className="card mt-3 result-card bg-danger bg-opacity-10 border-danger shadow-lg";
     resultName.innerText="Terjadi Kendala";
@@ -349,7 +389,19 @@ function showError(message){
 async function onScanSuccess(decodedText){
 
     if(isProcessing || isExpired) return;
-    isProcessing=true;
+    isProcessing = true;
+
+    if(Date.now() < openTime){
+        showError("Belum waktunya absen");
+        isProcessing = false;
+        return;
+    }
+
+    if(Date.now() > expireTime){
+        showError("Sesi sudah berakhir");
+        isProcessing = false;
+        return;
+    }
 
     try{
         const response = await fetch("{{ route('pembina.qr.scan_process') }}",{
@@ -365,8 +417,10 @@ async function onScanSuccess(decodedText){
         });
 
         const data = await response.json();
-        data.success ? showSuccess(data.message)
-                     : showError(data.message);
+
+        data.success
+            ? showSuccess(data)
+            : showError(data.message);
 
     }catch(e){
         showError("Terjadi kesalahan pada sistem.");
@@ -379,26 +433,40 @@ async function onScanSuccess(decodedText){
         isProcessing=false;
     },3000);
 }
-
-/* ================= CAMERA ================= */
 async function startScanner(cameraId){
-    if(html5QrCode){
-        await html5QrCode.stop();
+    try{
+        if(html5QrCode){
+            await html5QrCode.stop();
+        }
+
+        html5QrCode = new Html5Qrcode("reader");
+
+        await html5QrCode.start(
+            cameraId,
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            onScanSuccess
+        );
+
+    }catch(e){
+        console.error(e);
+        showError("Gagal memulai kamera");
     }
-
-    html5QrCode = new Html5Qrcode("reader");
-
-    await html5QrCode.start(
-        cameraId,
-        { fps:15, qrbox:{width:250,height:250} },
-        onScanSuccess
-    );
 }
 
 async function initScanner(){
-    cameras = await Html5Qrcode.getCameras();
-    if(cameras.length){
+    try{
+        cameras = await Html5Qrcode.getCameras();
+
+        if(!cameras.length){
+            showError("Kamera tidak ditemukan");
+            return;
+        }
+
         await startScanner(cameras[0].id);
+
+    }catch(e){
+        console.error(e);
+        showError("Gagal mengakses kamera. Izinkan permission kamera.");
     }
 }
 

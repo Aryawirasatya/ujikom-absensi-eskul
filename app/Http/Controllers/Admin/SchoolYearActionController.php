@@ -47,7 +47,10 @@ class SchoolYearActionController extends Controller
     if (!Hash::check($request->password, auth()->user()->password)) {
         return back()->withErrors(['password' => 'Password salah']);
     }
-
+    // Tambahkan di dalam transaksi sebelum membuat tahun baru
+    if (SchoolYear::where('start_date', '>=', now()->subMinutes(5))->exists()) {
+        throw new \Exception('Pergantian tahun baru saja dilakukan. Harap tunggu.');
+    }
     DB::transaction(function () use ($request) {
 
         $current = SchoolYear::where('is_active', true)

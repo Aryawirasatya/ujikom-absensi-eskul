@@ -133,7 +133,7 @@
                 <div class="row align-items-center">
 
                     {{-- INFO --}}
-                    <div class="col-xl-5 col-lg-5 mb-3 mb-lg-0">
+                   <div class="col-xl-5 col-lg-5 mb-3 mb-lg-0">
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <i class="fas fa-clock text-primary small"></i>
                             <span class="fw-bold text-secondary small">
@@ -141,20 +141,18 @@
                             </span>
                         </div>
                         <h4 class="fw-bold text-dark mb-0">{{ $act->title }}</h4>
-                        <span class="badge {{ $act->type=='routine' ? 'badge-soft-success' : 'badge-soft-info' }} px-3 py-2 rounded-pill fw-bold text-uppercase"
-                              style="font-size:.7rem;">
+                        
+                        <div class="mt-1 mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-door-open me-1"></i> Buka: <strong>{{ \Carbon\Carbon::parse($act->checkin_open_at)->format('H:i') }}</strong>
+                                <span class="mx-2">|</span>
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Mulai: <strong>{{ \Carbon\Carbon::parse($act->started_at)->format('H:i') }}</strong>
+                            </small>
+                        </div>
+                        <span class="badge {{ $act->type=='routine' ? 'badge-soft-success' : 'badge-soft-info' }} px-3 py-2 rounded-pill fw-bold text-uppercase" style="font-size:.7rem;">
                             <i class="fas {{ $act->type=='routine' ? 'fa-sync' : 'fa-star' }} me-1"></i>
                             {{ $act->type=='routine' ? 'Rutin' : 'agenda Khusus' }}
                         </span>
-                        @if($act->attendance_mode)
-                        <span class="badge {{ $act->attendance_mode=='qr' ? 'bg-primary-subtle text-primary' : 'bg-secondary-subtle text-secondary' }} px-3 py-2 rounded-pill"
-                              style="font-size:.7rem;">
-                            <i class="fas {{ $act->attendance_mode=='qr' ? 'fa-qrcode' : 'fa-pencil-alt' }} me-1"></i>
-                            {{ strtoupper($act->attendance_mode) }}
-                        </span>
-                        @endif
-                        <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                        </div>
                     </div>
 
                     {{-- STATUS --}}
@@ -273,7 +271,7 @@
                     <div class="status-sidebar bg-status-scheduled"></div>
                     <div class="card-body p-4 ms-3">
                         <div class="row align-items-center">
-                            <div class="col-md-6">
+                           <div class="col-md-6">
                                 <div class="d-flex align-items-center gap-2 mb-2">
                                     <i class="fas fa-calendar-plus text-info small"></i>
                                     <span class="fw-bold text-info small">
@@ -281,6 +279,12 @@
                                     </span>
                                 </div>
                                 <h4 class="fw-bold text-dark mb-0">{{ $act->title }}</h4>
+                                
+                                <div class="mt-1">
+                                    <span class="badge bg-light text-dark border-0">
+                                        <i class="bi bi-clock me-1"></i> Mulai Pukul: {{ \Carbon\Carbon::parse($act->started_at)->format('H:i') }}
+                                    </span>
+                                </div>
                             </div>
                             <div class="col-md-3 text-center">
                                 <span class="badge badge-soft-warning px-4 py-2 rounded-pill fw-bold">DIJADWALKAN</span>
@@ -412,7 +416,6 @@
     <input type="hidden" name="mode" id="chooseModeInput" value="">
 </form>
 
-{{-- ===== MODAL AGENDA KHUSUS ===== --}}
 <div class="modal fade" id="nonRoutineModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="{{ route('pembina.activity.store_non_routine', $eskul->id) }}"
@@ -422,25 +425,55 @@
                 <h5 class="modal-title fw-bold">Entri Agenda Khusus Baru</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
+            
             <div class="modal-body p-5">
+                {{-- Nama Agenda --}}
                 <div class="mb-4">
                     <label class="form-label fw-bold text-dark">Nama Agenda / Kegiatan</label>
-                    <input type="text" name="title" class="form-control border-0 bg-light p-3 shadow-none rounded-4"
+                    <input type="text" name="title" value="{{ old('title') }}" 
+                           class="form-control border-0 bg-light p-3 rounded-4 @error('title') is-invalid @enderror" 
                            placeholder="Contoh: Rapat Koordinasi Lomba" required>
                 </div>
+
+                {{-- Tanggal --}}
                 <div class="mb-4">
                     <label class="form-label fw-bold text-dark">Tanggal Pelaksanaan</label>
-                    <input type="date" name="activity_date" class="form-control border-0 bg-light p-3 shadow-none rounded-4"
-                           value="{{ date('Y-m-d') }}" required>
+                    <input type="date" name="activity_date" value="{{ old('activity_date', date('Y-m-d')) }}" 
+                           class="form-control border-0 bg-light p-3 rounded-4 @error('activity_date') is-invalid @enderror" required>
                 </div>
+
+                <div class="row">
+                    {{-- Jam Mulai --}}
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label fw-bold text-dark">Jam Mulai</label>
+                        <input type="time" name="start_time" value="{{ old('start_time') }}"
+                               class="form-control border-0 bg-light p-3 rounded-4 @error('start_time') is-invalid @enderror" required>
+                    </div>
+
+                    {{-- Jam Buka Absensi --}}
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label fw-bold text-dark">Jam Buka Absensi</label>
+                        <input type="time" name="checkin_open_time" value="{{ old('checkin_open_time') }}"
+                               class="form-control border-0 bg-light p-3 rounded-4 @error('checkin_open_time') is-invalid @enderror" required>
+                    </div>
+                </div>
+                
+                {{-- Tampilkan Error Spesifik di Bawah Input Jam --}}
+                @error('checkin_open_time')
+                    <div class="alert alert-danger border-0 small rounded-3 py-2">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ $message }}
+                    </div>
+                @enderror
+
                 <div class="mb-0">
                     <label class="form-label fw-bold text-dark">Deskripsi (Opsional)</label>
-                    <textarea name="description" class="form-control border-0 bg-light p-3 shadow-none rounded-4"
-                              rows="4" placeholder="Tuliskan detail singkat kegiatan..."></textarea>
+                    <textarea name="description" class="form-control border-0 bg-light p-3 rounded-4"
+                              rows="3" placeholder="Tuliskan detail singkat...">{{ old('description') }}</textarea>
                 </div>
             </div>
+
             <div class="modal-footer border-0 px-5 pb-5">
-                <button type="submit" class="btn btn-primary w-100 py-3 rounded-pill fw-bold shadow-lg">
+                <button type="submit" class="btn btn-primary w-100 py-3 rounded-pill fw-bold shadow">
                     Simpan & Terbitkan Agenda
                 </button>
             </div>

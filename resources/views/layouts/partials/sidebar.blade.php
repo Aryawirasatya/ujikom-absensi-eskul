@@ -63,6 +63,20 @@
                         </a>
                     </li>
 
+                    <li class="nav-section">
+                        <span class="sidebar-mini-icon">
+                            <i class="fa fa-chart-bar"></i>
+                        </span>
+                        <h4 class="text-section">Monitoring & Integrity</h4>
+                    </li>
+
+                    <li class="nav-item {{ request()->routeIs('admin.dompet.*') ? 'active' : '' }}">
+                        <a href="{{ route('admin.dompet.index') }}">
+                            <i class="fas fa-wallet"></i>
+                            <p>Dompet Integritas</p>
+                        </a>
+                    </li>
+
                     <li class="nav-item {{ request()->routeIs('admin.laporan.*') ? 'active' : '' }}">
                         <a href="{{ route('admin.laporan.index') }}">
                             <i class="bi bi-bar-chart"></i>
@@ -92,36 +106,33 @@
                     </li>
                 @endrole
 
-               @role('pembina')
-    <li class="nav-section">
-        <span class="sidebar-mini-icon"><i class="fa fa-tasks"></i></span>
-        <h4 class="text-section">Menu Pembina</h4>
-    </li>
+                @role('pembina')
+                    <li class="nav-section">
+                        <span class="sidebar-mini-icon"><i class="fa fa-tasks"></i></span>
+                        <h4 class="text-section">Menu Pembina</h4>
+                    </li>
 
-    {{-- Menu Manajemen --}}
-    <li class="nav-item {{ request()->routeIs('pembina.eskul.index') ? 'active' : '' }}">
-        <a href="{{ route('pembina.eskul.index') }}">
-            <i class="fas fa-futbol"></i>
-            <p>Eskul yang dikelola</p>
-        </a>
-    </li>
+                    <li class="nav-item {{ request()->routeIs('pembina.eskul.index') ? 'active' : '' }}">
+                        <a href="{{ route('pembina.eskul.index') }}">
+                            <i class="fas fa-futbol"></i>
+                            <p>Eskul yang dikelola</p>
+                        </a>
+                    </li>
 
-    {{-- Menu Laporan Absensi --}}
-    <li class="nav-item {{ request()->routeIs('pembina.laporan.*') ? 'active' : '' }}">
-        <a href="{{ route('pembina.laporan.index') }}">
-            <i class="bi bi-graph-up"></i>
-            <p>Laporan Absensi</p>
-        </a>
-    </li>
+                    <li class="nav-item {{ request()->routeIs('pembina.laporan.*') ? 'active' : '' }}">
+                        <a href="{{ route('pembina.laporan.index') }}">
+                            <i class="bi bi-graph-up"></i>
+                            <p>Laporan Absensi</p>
+                        </a>
+                    </li>
 
-    {{-- Menu Laporan Penilaian (GERBANG UTAMA) --}}
-    <li class="nav-item {{ request()->routeIs('pembina.penilaian.*') ? 'active' : '' }}">
-        <a href="{{ route('pembina.penilaian.laporan_index') }}">
-            <i class="fas fa-clipboard-check"></i>
-            <p>Laporan Penilaian</p>
-        </a>
-    </li>
-@endrole
+                    <li class="nav-item {{ request()->routeIs('pembina.penilaian.*') ? 'active' : '' }}">
+                        <a href="{{ route('pembina.penilaian.laporan_index') }}">
+                            <i class="fas fa-clipboard-check"></i>
+                            <p>Laporan Penilaian</p>
+                        </a>
+                    </li>
+                @endrole
 
                 @role('siswa')
                     <li class="nav-section">
@@ -135,6 +146,13 @@
                         <a href="{{ route('siswa.qr.show') }}">
                             <i class="fas fa-qrcode"></i>
                             <p>QR Saya</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item {{ request()->routeIs('siswa.dompet.*') ? 'active' : '' }}">
+                        <a href="{{ route('siswa.dompet.index') }}">
+                            <i class="fas fa-wallet"></i>
+                            <p>Dompet Saya</p>
                         </a>
                     </li>
 
