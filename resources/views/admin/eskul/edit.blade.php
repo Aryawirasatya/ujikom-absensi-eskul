@@ -4,7 +4,6 @@
 
 <div class="container-fluid py-4">
 
-```
 {{-- HEADER --}}
 <div class="mb-4">
     <h3 class="fw-bold mb-1">Edit Eskul</h3>

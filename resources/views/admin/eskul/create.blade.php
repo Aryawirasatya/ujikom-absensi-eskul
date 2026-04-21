@@ -4,7 +4,6 @@
 
 <div class="container">
 
-```
 <!-- Page Header -->
 <div class="d-flex align-items-center mb-4">
     <div>
@@ -118,7 +117,6 @@
     </div>
 
 </form>
-```
 
 </div>
 @endsection
