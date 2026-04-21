@@ -187,7 +187,7 @@
             <div class="auth-logo">
                 <i class="bi bi-qr-code-scan"></i>
             </div>
-            <h1 class="auth-title">Welcome back</h1>
+            <h1 class="auth-title">LOGIN</h1>
             <p class="auth-subtitle">Masuk ke sistem absensi ekstrakurikuler</p>
         </div>
 
