@@ -160,8 +160,11 @@ class QrScanController extends Controller
                 }
 
                 $isLate = $now->gt($startTime);
-                $lateMinutes = $isLate ? $now->diffInMinutes($startTime) : 0;
-                $earlyMinutes = !$isLate ? $now->diffInMinutes($startTime) : 0;
+               $lateMinutes = $isLate ? (int) $now->diffInMinutes($startTime) : 0;
+                if ($lateMinutes < 0) $lateMinutes = 0; // Safety net
+
+                $earlyMinutes = !$isLate ? (int) $now->diffInMinutes($startTime) : 0;
+                if ($earlyMinutes < 0) $earlyMinutes = 0; // Safety net
                 $status = $isLate ? 'late' : 'on_time';
                 $note = null;
                 $tokenUsed = false;
@@ -207,7 +210,7 @@ class QrScanController extends Controller
                     'name'          => $user->name,
                     'nisn'          => $user->nisn, // Tambahkan ini
                     'class'         => $user->currentAcademic->class_label ?? '-', // Tambahkan ini
-                    'status'        => strtoupper($status),
+                    'checkin_status'        => strtoupper($status),
                     'late_minutes'  => $lateMinutes, // Kirim angka aslinya
                     'early_minutes' => $earlyMinutes, // Kirim angka aslinya
                     'token_used'    => $tokenUsed
